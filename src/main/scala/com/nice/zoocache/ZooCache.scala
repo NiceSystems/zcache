@@ -9,6 +9,7 @@ import org.apache.zookeeper.{WatchedEvent, Watcher}
 import java.util.Date
 import com.netflix.curator.framework
 import framework.{CuratorFramework, CuratorFrameworkFactory}
+import grizzled.slf4j.Logging
 
 
 /**
@@ -24,7 +25,7 @@ object ZooCache{
     private val MAX_LOCAL_SHADOW = 20000
     private val INVALIDATE_PATH="/invalidate/"
 }
-class ZooCache(connectionString: String,systemId : String, useLocalShadow : Boolean = false) {
+class ZooCache(connectionString: String,systemId : String, useLocalShadow : Boolean = false) extends Logging {
   private val retryPolicy = new ExponentialBackoffRetry(1000, 10)
 
   private var client : CuratorFramework  = null
