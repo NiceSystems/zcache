@@ -16,6 +16,7 @@ class LocalShadow(size: Int) {
   def update[T](k: String, v:T) {
 
     map.put(k, v)
+
   }
 
   def remove(k: String) = map.remove(k)
