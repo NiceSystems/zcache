@@ -82,7 +82,7 @@ class ZooCache(connectionString: String,systemId : String, useLocalShadow : Bool
       client.setData().forPath(path,input)
 
       //todo:move shadow write to external put
-      if (useLocalShadow) shadow.update(path,input)
+      if (useLocalShadow) shadow.update[Array[Byte]](path,input)
       true
     } catch {
       case e: Exception => false
@@ -102,7 +102,7 @@ class ZooCache(connectionString: String,systemId : String, useLocalShadow : Bool
     }
 
     val path="/"+key
-    var result= if (useLocalShadow) shadow.get(path) else None
+    var result= if (useLocalShadow) shadow.get[Array[Byte]](path) else None
     result = if (result==None) getFromZoo(path) else result
 
     //todo: move shadow writes to external get
