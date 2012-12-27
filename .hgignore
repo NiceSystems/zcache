@@ -1,0 +1,5 @@
+syntax: glob
+src/test/resources/core-site.xml
+src/test/resources/hbase-env.sh
+src/test/resources/hbase-site.xml
+src/test/resources/hdfs-site.xml
