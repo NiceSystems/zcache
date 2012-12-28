@@ -22,7 +22,7 @@ object ZooCache{
     val FOREVER = -2
     private val TTL_PATH = "/ttl"
     private val CACHE_ROOT = "/cache/"
-    private val MAX_LOCAL_SHADOW = 20000
+    private val MAX_LOCAL_SHADOW_SIZE = 20000
     private val INVALIDATE_PATH="/invalidate/"
 }
 class ZooCache(connectionString: String,systemId : String, useLocalShadow : Boolean = false) extends Logging {
@@ -34,7 +34,7 @@ class ZooCache(connectionString: String,systemId : String, useLocalShadow : Bool
   buildClients()
 
   def buildClients() {
-
+    debug("(re)building clients")
     client = CuratorFrameworkFactory.builder().
       connectString(connectionString).
       namespace(ZooCache.CACHE_ROOT+systemId).
@@ -56,7 +56,7 @@ class ZooCache(connectionString: String,systemId : String, useLocalShadow : Bool
   }
 
 
-  lazy private val shadow = new LocalShadow(ZooCache.MAX_LOCAL_SHADOW)
+  lazy private val shadow = new LocalShadow(ZooCache.MAX_LOCAL_SHADOW_SIZE)
 
   def doesExist(key : String) : Boolean =  if (client.checkExists().forPath("/"+key)!=null) true else false
 
@@ -86,7 +86,10 @@ class ZooCache(connectionString: String,systemId : String, useLocalShadow : Bool
       if (useLocalShadow) shadow.update[Array[Byte]](path,input)
       true
     } catch {
-      case e: Exception => false
+      case e: Exception => {
+        error("can't access Zookeeper",e)
+        false
+      }
     }
   }
 
@@ -98,7 +101,10 @@ class ZooCache(connectionString: String,systemId : String, useLocalShadow : Bool
         else
           Some(client.getData.forPath(path))
       } catch {
-        case e: Exception => None
+        case e: Exception => {
+          error("can't access Zookeeper",e)
+          None
+        }
       }
     }
 
