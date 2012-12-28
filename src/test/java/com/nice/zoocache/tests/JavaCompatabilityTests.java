@@ -7,7 +7,7 @@ package com.nice.zoocache.tests;
  */
 
 // Test Java interoperability
-public class ZooCachTests {
+public class JavaCompatabilityTests {
 
 
 }
