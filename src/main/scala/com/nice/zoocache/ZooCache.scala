@@ -104,39 +104,28 @@ class ZooCache(connectionString: String,systemId : String, useLocalShadow : Bool
 
 
   private[zoocache] def  getBytes(key:String):Option[Array[Byte]] ={
-    def getFromZoo(path :String): Option[Array[Byte]] = {
-      try {
-        if (client.checkExists().forPath(path) == null) None
-        else
-          Some(client.getData.forPath(path))
-      } catch {
-        case e: Exception => {
-          error("can't update '"+ key+"' in Zookeeper",e)
-          None
-        }
+    val path="/"+key
+    try {
+      if (client.checkExists().forPath(path) == null) None
+      else
+        Some(client.getData.forPath(path))
+    } catch {
+      case e: Exception => {
+        error("can't update '"+ key+"' in Zookeeper",e)
+        None
       }
     }
-
-    val path="/"+key
-    var result= if (useLocalShadow) shadow.get[Array[Byte]](path) else None
-    result = if (result==None) getFromZoo(path) else result
-
-    //todo: move shadow writes to external get
-    if (useLocalShadow && result!=None) shadow.update(path,result.get)
-
-    result
 
   }
 
   def put(key :String, input : Any, ttl: Long = ZooCache.FOREVER):Boolean ={
-    //todo: add transaction for both writes
     val meta=new ItemMetadata()
-    meta.ttl=ttl
+    meta.ttl= ttl
     val wasSuccessful=putBytes(key,pack(input),pack(meta))
 
     if (wasSuccessful && useLocalShadow) {
-     shadow.update(key+ZooCache.TTL_PATH,meta)
-     shadow.update(key,input)
+          shadow.update(key,input)
+          shadow.update(key+ZooCache.TTL_PATH,meta)
     }
 
     wasSuccessful
@@ -144,22 +133,40 @@ class ZooCache(connectionString: String,systemId : String, useLocalShadow : Bool
 
 
   def get[T](key: String)(implicit manifest : Manifest[T]):Option[T] = {
-    // validate time to live
-    val metaBytes=getBytes(key+ZooCache.TTL_PATH)
-    metaBytes match {
-      case Some(meta) => {
-        val current=new Date().getTime
-        val expiration = unpack[ItemMetadata](meta).expirationTime
-        if(current > expiration) return None
+
+    def isInShadow:Boolean ={
+      if (!useLocalShadow) return false
+
+      val meta=shadow.get[ItemMetadata](key+ZooCache.TTL_PATH)
+      meta match {
+        case Some(metadata)=>  metadata.isValid
+        case None =>  false
       }
-      case None =>return None
     }
 
-    val data = getBytes(key)
-    data match {
+    def isInCache:Boolean ={
+      val metaBytes=getBytes(key+ZooCache.TTL_PATH)
+      metaBytes match {
+        case Some(meta) =>  unpack[ItemMetadata](meta).isValid
+        case None =>false
+        }
+    }
+
+    def getData:Option[T]={
+      val data = getBytes(key)
+      data match {
       case Some(result) =>  Some(unpack[T](result))
       case None => None  // key not found
+       }
     }
+
+    if (isInShadow) return shadow.get[T](key)
+    else if (!isInCache) return None
+
+    val result=getData
+    if (useLocalShadow) shadow.update(key,result.get)
+    result
+
   }
 
   def get[T](parentKey: String,key: String)(implicit manifest : Manifest[T]):Option[T] = {

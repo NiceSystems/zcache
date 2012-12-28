@@ -17,4 +17,8 @@ class ItemMetadata(){
   def expirationTime = if (ttl!=ZooCache.FOREVER) updateTime + ttl else  Long.MaxValue
   var ttl : Long= ZooCache.FOREVER
 
+  def isValid:Boolean ={
+    val current=new Date().getTime
+    current<expirationTime
+  }
 }
