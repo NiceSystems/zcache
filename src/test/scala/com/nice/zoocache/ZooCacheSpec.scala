@@ -25,8 +25,9 @@ class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
   it("should do a simple put/get Bytes"){
     val t=new Test()
     t.name="Arnon"
+    val ttl=new ItemMetadata()
 
-    cache.putBytes("test",ScalaMessagePack.write(t))
+    cache.putBytes("test",ScalaMessagePack.write(t),ScalaMessagePack.write(ttl))
     val value = cache.getBytes("test")
     value match {
       case Some(result) => assert(unpack[Test](result).name===t.name)

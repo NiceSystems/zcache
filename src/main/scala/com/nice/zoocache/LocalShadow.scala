@@ -14,7 +14,7 @@ class LocalShadow(size: Int) extends Logging {
 
   private val map= new LRUMap(size)
 
-  def update[T](k: String, v:T) {
+  def update(k: String, v:Any) {
     map.put(k, v)
   }
 

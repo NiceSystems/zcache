@@ -74,20 +74,29 @@ class ZooCache(connectionString: String,systemId : String, useLocalShadow : Bool
     client.delete().inBackground().forPath(path)
   }
 
-  private[zoocache] def putBytes (key : String, input :Array[Byte]):Boolean  ={
+  private[zoocache] def putBytes (key : String, input :Array[Byte],ttl: Array[Byte]):Boolean  ={
     val path="/"+key
+    val ttlPath=path+ZooCache.TTL_PATH
+
     try {
-      val ensurePath=client.newNamespaceAwareEnsurePath(path)
-      ensurePath.ensure(client.getZookeeperClient)
+      def ensurePath(path:String) {
+        val ensurePath = client.newNamespaceAwareEnsurePath(path)
+        ensurePath.ensure(client.getZookeeperClient)
+      }
+      ensurePath(path)
+      ensurePath(ttlPath)
 
-      client.setData().forPath(path,input)
+      client.inTransaction().
+          setData().forPath(path,input).
+        and().
+          setData().forPath(ttlPath,ttl).
+        and().
+          commit()
 
-      //todo:move shadow write to external put
-      if (useLocalShadow) shadow.update[Array[Byte]](path,input)
       true
     } catch {
       case e: Exception => {
-        error("can't access Zookeeper",e)
+        error("can't read '"+key+"' from Zookeeper",e)
         false
       }
     }
@@ -102,7 +111,7 @@ class ZooCache(connectionString: String,systemId : String, useLocalShadow : Bool
           Some(client.getData.forPath(path))
       } catch {
         case e: Exception => {
-          error("can't access Zookeeper",e)
+          error("can't update '"+ key+"' in Zookeeper",e)
           None
         }
       }
@@ -121,12 +130,16 @@ class ZooCache(connectionString: String,systemId : String, useLocalShadow : Bool
 
   def put(key :String, input : Any, ttl: Long = ZooCache.FOREVER):Boolean ={
     //todo: add transaction for both writes
-    putBytes(key,pack(input))
     val meta=new ItemMetadata()
     meta.ttl=ttl
-    putBytes(key+ZooCache.TTL_PATH,pack(meta))
+    val wasSuccessful=putBytes(key,pack(input),pack(meta))
 
+    if (wasSuccessful && useLocalShadow) {
+     shadow.update(key+ZooCache.TTL_PATH,meta)
+     shadow.update(key,input)
+    }
 
+    wasSuccessful
   }
 
 
