@@ -124,13 +124,17 @@ class ZooCache(connectionString: String,systemId : String, useLocalShadow : Bool
     val wasSuccessful=putBytes(key,pack(input),pack(meta))
 
     if (wasSuccessful && useLocalShadow) {
-          shadow.update(key,input)
-          shadow.update(key+ZooCache.TTL_PATH,meta)
+          putLocalCopy(key, input, meta)
     }
 
     wasSuccessful
   }
 
+
+  private def putLocalCopy(key: String, input: Any, meta: ItemMetadata) {
+    shadow.update(key, input)
+    shadow.update(key + ZooCache.TTL_PATH, meta)
+  }
 
   def get[T](key: String)(implicit manifest : Manifest[T]):Option[T] = {
 
@@ -144,11 +148,14 @@ class ZooCache(connectionString: String,systemId : String, useLocalShadow : Bool
       }
     }
 
-    def isInCache:Boolean ={
+    def isInCache:Option[ItemMetadata] ={
       val metaBytes=getBytes(key+ZooCache.TTL_PATH)
       metaBytes match {
-        case Some(meta) =>  unpack[ItemMetadata](meta).isValid
-        case None =>false
+        case Some(meta) => {
+                val result=unpack[ItemMetadata](meta)
+                if (result.isValid) Some(result) else None
+        }
+        case None =>None
         }
     }
 
@@ -161,11 +168,17 @@ class ZooCache(connectionString: String,systemId : String, useLocalShadow : Bool
     }
 
     if (isInShadow) return shadow.get[T](key)
-    else if (!isInCache) return None
 
-    val result=getData
-    if (useLocalShadow) shadow.update(key,result.get)
-    result
+    isInCache match{
+      case None => None
+      case Some(meta) => {
+        val result=getData
+        if (useLocalShadow) putLocalCopy(key,result.get,meta)
+        result
+      }
+    }
+
+
 
   }
 
