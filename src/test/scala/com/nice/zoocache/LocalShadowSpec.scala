@@ -46,9 +46,9 @@ class LocalShadowSpec extends FunSpec {
   it("should fetch from remote cache if local copy expired") {
     val t=new Test()
     t.name="remote"
-    val key="changed"
+    val key="expired"
 
-    second.put(key,t,1)
+    second.put(key,t,10)
     val firstResult=cache.get[Test](key)
     assert(firstResult.get.name===t.name)
 

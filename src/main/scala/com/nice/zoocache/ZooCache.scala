@@ -19,7 +19,7 @@ import grizzled.slf4j.Logging
  */
 
 object ZooCache{
-    val FOREVER = -2
+    val FOREVER : Long= -2
     private val TTL_PATH = "/ttl"
     private val CACHE_ROOT = "/cache/"
     private val MAX_LOCAL_SHADOW_SIZE = 20000
@@ -141,16 +141,14 @@ class ZooCache(connectionString: String,systemId : String, useLocalShadow : Bool
     def isInShadow:Boolean ={
       if (!useLocalShadow) return false
 
-      val meta=shadow.get[ItemMetadata](key+ZooCache.TTL_PATH)
-      meta match {
+      shadow.get[ItemMetadata](key+ZooCache.TTL_PATH) match {
         case Some(metadata)=>  metadata.isValid
         case None =>  false
       }
     }
 
     def isInCache:Option[ItemMetadata] ={
-      val metaBytes=getBytes(key+ZooCache.TTL_PATH)
-      metaBytes match {
+      getBytes(key+ZooCache.TTL_PATH) match {
         case Some(meta) => {
                 val result=unpack[ItemMetadata](meta)
                 if (result.isValid) Some(result) else None
