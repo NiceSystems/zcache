@@ -69,12 +69,6 @@
           <scope>compile</scope>
       </dependency>
 
-
-      <dependency>
-          <groupId>com.twitter</groupId>
-          <artifactId>finatra</artifactId>
-          <version>1.0.3</version>
-      </dependency>
       <dependency>
           <groupId>com.netflix.curator</groupId>
           <artifactId>curator-framework</artifactId>

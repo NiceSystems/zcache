@@ -31,19 +31,18 @@ object ZooCache  {
     val FOREVER : Long= -2
     private val TTL_PATH = "/ttl"
     private val CACHE_ROOT = "/cache/"
-    private val MAX_LOCAL_SHADOW_SIZE = 20000
     private val INVALIDATE_PATH="/invalidate"
 }
-class ZooCache(connectionString: String,systemId : String, useLocalShadow : Boolean = false) extends Logging {
+class ZooCache(connectionString: String,systemId : String, localCacheSize: Int =1) extends  Logging {
 
+  private val useLocalShadow = localCacheSize>0
   private val retryPolicy = new ExponentialBackoffRetry(1000, 10)
-
   private var client : CuratorFramework  = null
   private var localInvalidationClient: CuratorFramework = null
-
   buildClients()
 
-  lazy private val shadow = new LocalShadow(ZooCache.MAX_LOCAL_SHADOW_SIZE)
+  lazy private val cacheSize=if (localCacheSize>=(Int.MaxValue/2)) Int.MaxValue else localCacheSize*2
+  lazy private val shadow = new LocalShadow(cacheSize)
   lazy private val systemInvalidationPath=ZooCache.INVALIDATE_PATH +"/"+systemId
   lazy private val watcher : Watcher = new Watcher() {
     override def process(event: WatchedEvent) {
@@ -168,7 +167,7 @@ class ZooCache(connectionString: String,systemId : String, useLocalShadow : Bool
     shadow.update(key + ZooCache.TTL_PATH, meta)
   }
 
-  def get[T](key: String)(implicit manifest : Manifest[T]):Option[T] = {
+  def get[T<:AnyRef](key: String)(implicit manifest : Manifest[T]):Option[T] = {
 
     def isInShadow:Boolean ={
       if (!useLocalShadow) return false
@@ -207,12 +206,9 @@ class ZooCache(connectionString: String,systemId : String, useLocalShadow : Bool
         result
       }
     }
-
-
-
   }
 
-  def get[T](parentKey: String,key: String)(implicit manifest : Manifest[T]):Option[T] = {
+  def get[T<:AnyRef](parentKey: String,key: String)(implicit manifest : Manifest[T]):Option[T] = {
     get[T](parentKey+"/"+key)
   }
 

@@ -12,8 +12,8 @@ class LocalShadowSpec extends FunSpec {
   val server=new TestingServer()
   val testCluster=server.getConnectString
   //var testCluster="10.211.55.25:2181"
-  val cache  = new ZooCache(testCluster,"test",useLocalShadow = true)
-  val second = new ZooCache(testCluster,"test",useLocalShadow = true)
+  val cache  = new ZooCache(testCluster,"test",100)
+  val second = new ZooCache(testCluster,"test",100)
 
 
 

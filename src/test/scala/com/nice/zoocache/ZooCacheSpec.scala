@@ -154,7 +154,7 @@ class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
   it("should do a simple put/get  with memory shadow"){
     val t=new Test()
     t.name="Arnon"
-    val shadowCache= new ZooCache(testCluster,"test",useLocalShadow = true)
+    val shadowCache= new ZooCache(testCluster,"test",100)
 
     shadowCache.put("test",t)
     val value = shadowCache.get[Test]("test")

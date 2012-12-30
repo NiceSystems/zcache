@@ -21,7 +21,7 @@ public class JavaCompatabilityTests  {
     public JavaCompatabilityTests() throws Exception {
         server = new TestingServer();
         testCluster=server.getConnectString();
-        cache = new JZooCache(testCluster, "javaTest");
+        cache = new JZooCache(testCluster, "javaTest",100);
     }
 
 
@@ -42,6 +42,7 @@ public class JavaCompatabilityTests  {
         TestClass cls=new TestClass();
         cls.value.intValue=5;
         cls.longValue=100L;
+        cls.listStrings.add("blah");
         String key="testClass";
 
         cache.put(key,cls);
@@ -50,6 +51,7 @@ public class JavaCompatabilityTests  {
 
         assertEquals(cls.longValue,result.longValue);
         assertEquals(cls.value.intValue,result.value.intValue);
+        assertEquals(cls.listStrings.get(0),result.listStrings.get(0));
     }
 
 
