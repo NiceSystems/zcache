@@ -18,14 +18,15 @@ import grizzled.slf4j.Logging
  * Time: 10:47 AM
  */
 
-object ZooCache{
+object ZooCache  {
     val FOREVER : Long= -2
     private val TTL_PATH = "/ttl"
     private val CACHE_ROOT = "/cache/"
     private val MAX_LOCAL_SHADOW_SIZE = 20000
-    private val INVALIDATE_PATH="/invalidate/"
+    private val INVALIDATE_PATH="/invalidate"
 }
 class ZooCache(connectionString: String,systemId : String, useLocalShadow : Boolean = false) extends Logging {
+
   private val retryPolicy = new ExponentialBackoffRetry(1000, 10)
 
   private var client : CuratorFramework  = null
@@ -33,7 +34,21 @@ class ZooCache(connectionString: String,systemId : String, useLocalShadow : Bool
 
   buildClients()
 
-  def buildClients() {
+  lazy private val shadow = new LocalShadow(ZooCache.MAX_LOCAL_SHADOW_SIZE)
+  lazy private val systemInvalidationPath=ZooCache.INVALIDATE_PATH +"/"+systemId
+  lazy private val watcher : Watcher = new Watcher() {
+    override def process(event: WatchedEvent) {
+      try {
+        //reset the watch
+        localInvalidationClient.getChildren.usingWatcher(watcher).forPath(systemInvalidationPath)
+        shadow.clear()
+      } catch {
+        case e: InterruptedException =>  error("problem processing invalidation event",e)
+      }
+    }
+  }
+
+  private def buildClients() {
     debug("(re)building clients")
     client = CuratorFrameworkFactory.builder().
       connectString(connectionString).
@@ -42,21 +57,33 @@ class ZooCache(connectionString: String,systemId : String, useLocalShadow : Bool
       build
 
     client.start()
+    if (useLocalShadow) initLocal()
 
-    if (useLocalShadow) {
-
-      localInvalidationClient =  CuratorFrameworkFactory.builder().
+    def initLocal() {
+      localInvalidationClient = CuratorFrameworkFactory.builder().
         connectString(connectionString).
-        namespace(ZooCache.INVALIDATE_PATH+systemId).
+        namespace(ZooCache.INVALIDATE_PATH).
         retryPolicy(retryPolicy).
         build
 
       localInvalidationClient.start()
+      ensurePath(localInvalidationClient,systemInvalidationPath)
+      localInvalidationClient.getChildren.usingWatcher(watcher).forPath(systemInvalidationPath)
     }
   }
 
+  private def ensurePath(cl:CuratorFramework, path:String) {
+    val ensurePath = cl.newNamespaceAwareEnsurePath(path)
+    ensurePath.ensure(cl.getZookeeperClient)
+  }
 
-  lazy private val shadow = new LocalShadow(ZooCache.MAX_LOCAL_SHADOW_SIZE)
+  //todo:add invalidate by id
+  def invalidate(){
+    if (localInvalidationClient.checkExists.forPath(systemInvalidationPath+"/doit")==null)
+      localInvalidationClient.create().forPath(systemInvalidationPath+"/doit")
+    else
+      localInvalidationClient.delete().forPath(systemInvalidationPath+"/doit")
+  }
 
   def doesExist(key : String) : Boolean =  if (client.checkExists().forPath("/"+key)!=null) true else false
 
@@ -79,12 +106,9 @@ class ZooCache(connectionString: String,systemId : String, useLocalShadow : Bool
     val ttlPath=path+ZooCache.TTL_PATH
 
     try {
-      def ensurePath(path:String) {
-        val ensurePath = client.newNamespaceAwareEnsurePath(path)
-        ensurePath.ensure(client.getZookeeperClient)
-      }
-      ensurePath(path)
-      ensurePath(ttlPath)
+
+      ensurePath(client,path)
+      ensurePath(client,ttlPath)
 
       client.inTransaction().
           setData().forPath(path,input).

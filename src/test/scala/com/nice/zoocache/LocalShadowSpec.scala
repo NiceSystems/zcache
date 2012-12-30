@@ -60,5 +60,45 @@ class LocalShadowSpec extends FunSpec {
 
   }
 
-  it("should invalidate local copy if asked") (pending)
+  it("should invalidate local copy if asked") {
+    val t=new Test()
+    t.name="remote"
+    val key="invalidated"
+
+    second.put(key,t,ZooCache.FOREVER)
+    val firstResult=cache.get[Test](key)
+    assert(firstResult.get.name===t.name)
+
+    t.name="changed"
+    second.put(key,t,ZooCache.FOREVER)
+    second.invalidate()
+    Thread.sleep(1000)
+    val secondResult=cache.get[Test](key)
+
+    assert(secondResult.get.name==t.name)
+  }
+
+  it("should can invalidate more than once") {
+    val t=new Test()
+    t.name="remote"
+    val key="invalidated2"
+
+    second.put(key,t,ZooCache.FOREVER)
+    val firstResult=cache.get[Test](key)
+    assert(firstResult.get.name===t.name)
+
+    t.name="changed"
+    second.put(key,t,ZooCache.FOREVER)
+    second.invalidate()
+    Thread.sleep(1000)
+    val secondResult=cache.get[Test](key)
+
+    t.name="changed again"
+    second.put(key,t,ZooCache.FOREVER)
+    second.invalidate()
+    Thread.sleep(1000)
+    val thirdResult=cache.get[Test](key)
+
+    assert(thirdResult.get.name==t.name)
+  }
 }

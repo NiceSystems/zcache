@@ -1,7 +1,7 @@
 package com.nice.zoocache
 
 
-import org.apache.commons.collections.map.{LRUMap}
+import org.apache.commons.collections.map.LRUMap
 import grizzled.slf4j.Logging
 
 /**
@@ -9,9 +9,12 @@ import grizzled.slf4j.Logging
  *
  * @param size the maximum number of Elements allowed in the LRU map
  */
-class LocalShadow(size: Int) extends Logging {
-  // Alternate constructor that gives you no load factor.
+private class LocalShadow(size: Int) extends Logging {
+  def clear(){
+    map.clear()
+  }
 
+  //todo:consider adding a load factor to the LRU initialization
   private val map= new LRUMap(size)
 
   def update(k: String, v:Any) {
