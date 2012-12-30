@@ -17,6 +17,12 @@ import grizzled.slf4j.Logging
  * Date: 12/26/12
  * Time: 10:47 AM
  */
+//todo: nice interface for Java users
+//todo: make localShadow thread safe (akka task)
+//todo: add scavenger to clean ZooCache (cluster of scavangers on all connected clients with leader election)
+//todo: API to remove a single item
+//todo: API to retrieve Metadata only
+
 
 object ZooCache  {
     val FOREVER : Long= -2
@@ -39,7 +45,7 @@ class ZooCache(connectionString: String,systemId : String, useLocalShadow : Bool
   lazy private val watcher : Watcher = new Watcher() {
     override def process(event: WatchedEvent) {
       try {
-        //reset the watch
+        //reset the watch as they are one-time
         localInvalidationClient.getChildren.usingWatcher(watcher).forPath(systemInvalidationPath)
         shadow.clear()
       } catch {

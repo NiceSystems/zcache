@@ -20,7 +20,6 @@ public class JavaCompatabilityTests  {
         server = new TestingServer();
         testCluster=server.getConnectString();
         cache = new ZooCache(testCluster, "javaTest",true);
-
     }
 
 
