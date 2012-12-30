@@ -5,6 +5,8 @@ import com.netflix.curator.test.TestingServer
 import org.msgpack.ScalaMessagePack._
 import org.msgpack.ScalaMessagePack
 import scala.Some
+import java.lang.{String => JString}
+import scala.Predef.String
 
 /**
  * User: arnonrgo
@@ -174,6 +176,7 @@ class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
     val value=cache.get[Test](key)
     assert(value==None)
   }
+
 
 
 

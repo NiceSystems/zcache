@@ -22,6 +22,9 @@ import grizzled.slf4j.Logging
 //todo: add scavenger to clean ZooCache (cluster of scavangers on all connected clients with leader election)
 //todo: API to remove a single item
 //todo: API to retrieve Metadata only
+//todo: renew zooKeeper connection after it failed on a new access
+//todo: Make removeAll recursive
+
 
 
 object ZooCache  {
@@ -99,7 +102,6 @@ class ZooCache(connectionString: String,systemId : String, useLocalShadow : Bool
     val children=client.getChildren.forPath(path)
 
 
-    //todo: consider making a recursive function
     for (child <- children) {
       for(grandchild <-client.getChildren.forPath(path+"/"+child)) client.delete().forPath(path+"/"+child+"/"+grandchild)
       client.delete().forPath(path+"/"+child)
