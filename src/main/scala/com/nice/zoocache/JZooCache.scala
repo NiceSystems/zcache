@@ -77,8 +77,8 @@ class JZooCache(connectionString: String,systemId : String, localCacheSize : Int
    *
    * @param parent the id (string) of the group to remove
    */
-  def removeAll(parent : String){
-    cache.removeAll(parent)
+  def removeItem(parent : String){
+    cache.removeItem(parent)
   }
 
   /**

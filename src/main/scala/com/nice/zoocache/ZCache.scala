@@ -43,9 +43,9 @@ trait ZCache {
     /**
      * Remove all the items from a group
      *
-     * @param parent the id (string) of the group to remove
+     * @param key the id (string) of the group  or item to remove
      */
-    def removeAll(parent : String)
+
     def removeItem(key: String)
 
     /**

@@ -33,9 +33,9 @@ import scala.Predef.String
  */
 class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
 
-  //var server=new TestingServer()
-  //var testCluster=server.getConnectString
-  var testCluster="hadoop2"
+  var server=new TestingServer()
+  var testCluster=server.getConnectString
+  //var testCluster="hadoop2"
   var cache=new ZooCache(testCluster,"test")
 
   it("should connect to the cluster"){
@@ -138,7 +138,7 @@ class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
     cache.put(parent,key1,t1)
     cache.put(parent,key2,t2)
 
-    val results=cache.removeAll(parent)
+    val results=cache.removeItem(parent)
     assert(!cache.doesExist(parent+"/"+key1))
   }
 
@@ -191,6 +191,17 @@ class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
     cache.put(key,t1,5)
 
     Thread.sleep(500)
+    val value=cache.get[Test](key)
+    assert(value==None)
+  }
+
+  it("can remove item"){
+    val t1=new Test()
+    t1.name="old"
+    val key="deleted"
+    cache.put(key,t1,ZooCache.FOREVER)
+    cache.removeItem(key)
+
     val value=cache.get[Test](key)
     assert(value==None)
   }

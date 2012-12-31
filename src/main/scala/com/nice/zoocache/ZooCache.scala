@@ -39,14 +39,13 @@ import akka.util.Timeout
  * Date: 12/26/12
  * Time: 10:47 AM
  */
-//todo: API to remove a single item
-//todo: Make removeAll recursive
 
 //todo: add scavenger to clean ZooCache (cluster of scavangers on all connected clients with leader election)
 //todo: API to retrieve Metadata only
 //todo: renew zooKeeper connection after it failed on a new access
 //todo: change ZooCahce interface to return Future instead of Option (possibly unite java and scala interfaces)
 //todo: api to invalidate specific items
+//todo: consider replacing curator with util-zk (at least for the simple access stuff) ??
 
 
 
@@ -248,5 +247,15 @@ class ZooCache(connectionString: String,systemId : String, localCacheSize: Int =
     put(parentKey+"/"+key,input,ttl)
   }
 
-  def removeItem(key: String) {}
+  def removeItem(key: String) {
+    val path=if (key.startsWith("/")) key else  "/"+key
+    val children=client.getChildren.forPath(path)
+
+    for (child <- children) {
+       removeItem(key+"/"+child)
+     }
+    client.delete().forPath(path)
+    shadowActor ! Remove(key)
+
+  }
 }
