@@ -10,15 +10,17 @@ import java.util.Date
 import com.netflix.curator.framework
 import framework.{CuratorFramework, CuratorFrameworkFactory}
 import grizzled.slf4j.Logging
-
+import akka.actor.{Props, ActorSystem}
+import akka.pattern.ask
+import akka.dispatch.Await
+import akka.util.duration._
+import akka.util.Timeout
 
 /**
  * User: arnonrgo
  * Date: 12/26/12
  * Time: 10:47 AM
  */
-//todo: nice interface for Java users
-//todo: make localShadow thread safe (akka task)
 //todo: add scavenger to clean ZooCache (cluster of scavangers on all connected clients with leader election)
 //todo: API to remove a single item
 //todo: API to retrieve Metadata only
@@ -42,14 +44,17 @@ class ZooCache(connectionString: String,systemId : String, localCacheSize: Int =
   buildClients()
 
   lazy private val cacheSize=if (localCacheSize>=(Int.MaxValue/2)) Int.MaxValue else localCacheSize*2
-  lazy private val shadow = new LocalShadow(cacheSize)
+  lazy private val system=ActorSystem(systemId)
+  lazy private val shadowActor=system.actorOf(Props(new LocalShadow(cacheSize)))
   lazy private val systemInvalidationPath=ZooCache.INVALIDATE_PATH +"/"+systemId
+  implicit val timeout = Timeout(1 second)
   lazy private val watcher : Watcher = new Watcher() {
     override def process(event: WatchedEvent) {
       try {
         //reset the watch as they are one-time
         localInvalidationClient.getChildren.usingWatcher(watcher).forPath(systemInvalidationPath)
-        shadow.clear()
+        //shadow.clear()
+        shadowActor ! Clear()
       } catch {
         case e: InterruptedException =>  error("problem processing invalidation event",e)
       }
@@ -163,16 +168,17 @@ class ZooCache(connectionString: String,systemId : String, localCacheSize: Int =
 
 
   private def putLocalCopy(key: String, input: Any, meta: ItemMetadata) {
-    shadow.update(key, input)
-    shadow.update(key + ZooCache.TTL_PATH, meta)
+    shadowActor ! Update(key,input)
+    shadowActor ! Update(key + ZooCache.TTL_PATH, meta)
   }
 
   def get[T<:AnyRef](key: String)(implicit manifest : Manifest[T]):Option[T] = {
 
     def isInShadow:Boolean ={
       if (!useLocalShadow) return false
-
-      shadow.get[ItemMetadata](key+ZooCache.TTL_PATH) match {
+      val reply=Await.result(shadowActor ? Get(key+ZooCache.TTL_PATH), 1 second).asInstanceOf[Option[ItemMetadata]]
+     reply match
+     {
         case Some(metadata)=>  metadata.isValid
         case None =>  false
       }
@@ -196,7 +202,7 @@ class ZooCache(connectionString: String,systemId : String, localCacheSize: Int =
        }
     }
 
-    if (isInShadow) return shadow.get[T](key)
+    if (isInShadow) return  Await.result(shadowActor ? Get(key), 1 second).asInstanceOf[Option[T]]
 
     isInCache match{
       case None => None
