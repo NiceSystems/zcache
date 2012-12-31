@@ -1,5 +1,23 @@
 package com.nice.zoocache
-
+/**
+ * Copyright (C) 2012 NICE Systems ltd.
+ * <p/>
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * <p/>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p/>
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * @author Arnon Rotem-Gal-Oz
+ * @version %I%, %G%
+ *          <p/>
+ */
 
 import com.netflix.curator.retry.ExponentialBackoffRetry
 
@@ -21,11 +39,14 @@ import akka.util.Timeout
  * Date: 12/26/12
  * Time: 10:47 AM
  */
-//todo: add scavenger to clean ZooCache (cluster of scavangers on all connected clients with leader election)
 //todo: API to remove a single item
+//todo: Make removeAll recursive
+
+//todo: add scavenger to clean ZooCache (cluster of scavangers on all connected clients with leader election)
 //todo: API to retrieve Metadata only
 //todo: renew zooKeeper connection after it failed on a new access
-//todo: Make removeAll recursive
+//todo: change ZooCahce interface to return Future instead of Option (possibly unite java and scala interfaces)
+//todo: api to invalidate specific items
 
 
 
@@ -35,7 +56,7 @@ object ZooCache  {
     private val CACHE_ROOT = "/cache/"
     private val INVALIDATE_PATH="/invalidate"
 }
-class ZooCache(connectionString: String,systemId : String, localCacheSize: Int =1) extends  Logging {
+class ZooCache(connectionString: String,systemId : String, localCacheSize: Int =1) extends ZCache with Logging {
 
   private val useLocalShadow = localCacheSize>0
   private val retryPolicy = new ExponentialBackoffRetry(1000, 10)
@@ -112,6 +133,8 @@ class ZooCache(connectionString: String,systemId : String, localCacheSize: Int =
     }
     client.delete().inBackground().forPath(path)
   }
+
+
 
   private[zoocache] def putBytes (key : String, input :Array[Byte],ttl: Array[Byte]):Boolean  ={
     val path="/"+key
@@ -225,5 +248,5 @@ class ZooCache(connectionString: String,systemId : String, localCacheSize: Int =
     put(parentKey+"/"+key,input,ttl)
   }
 
-
+  def removeItem(key: String) {}
 }
