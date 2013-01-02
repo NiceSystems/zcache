@@ -11,6 +11,14 @@ ZooCache is a simple cache implementation on top of  [ZooKeeper™](http://zooke
 
 The project is currently compiled and tested with Scala 2.9.1
 
+
+General note
+ZooKeeper is not the perfect ultimate cache due to some known limitation.  Note the following caveats:
+  * ZooKeeper has a 1MB transport limitation. For now a single cache node (systemID) can hold around 10K items (sharding of keys to create deeper will be added later)
+  * The startup can be slow on large ZNode so keep TTLs low for larger caches
+  * ZooKeeper can start to perform badly if there are many nodes with thousands of children.
+  * all data is kept in memory, all nodes contains exact replica of the dataœ
+
 ## Sponsors
 ![NICE](http://www.nice.com/sites/all/themes/nice/logo.png)
 
