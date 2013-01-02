@@ -59,7 +59,7 @@ object ZooCache  {
 }
 class ZooCache(connectionString: String,systemId : String, localCacheSize: Int =1) extends ZCache with Logging {
 
-  private val useLocalShadow = localCacheSize>0
+  private val useLocalShadow = localCacheSize>1
   private val retryPolicy = new ExponentialBackoffRetry(1000, 10)
   private var client : CuratorFramework  = null
   private var localInvalidationClient: CuratorFramework = null
