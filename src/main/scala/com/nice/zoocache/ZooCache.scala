@@ -56,7 +56,7 @@ object ZooCache  {
     private[zoocache] val TTL_PATH = "/ttl"
     private val CACHE_ID = "cache"
     private[zoocache] val CACHE_ROOT = "/"+CACHE_ID
-    private val INVALIDATE_PATH="/invalidate"
+    private val INVALIDATE_PATH=CACHE_ROOT+"/invalidate"
 }
 
 class ZooCache(connectionString: String,systemId : String, private val localCacheSize: Int =1,private val interval : Duration = 30 minutes) extends ZCache with Logging {
@@ -64,23 +64,20 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
   private val useLocalShadow = localCacheSize>1
   private val retryPolicy = new ExponentialBackoffRetry(1000, 10)
   private var client : CuratorFramework  = null
-  private var scavengerClient :CuratorFramework = null
-  private var localInvalidationClient: CuratorFramework = null
   private val system=ActorSystem(systemId)
-
+  private val unifiedClient = CuratorFrameworkFactory.builder().
+    connectString(connectionString).
+    namespace(ZooCache.CACHE_ROOT).
+    retryPolicy(retryPolicy).
+    build
+  unifiedClient.start()
   buildClients
-  initScavenger()
+  initScavenger
 
 
-  def initScavenger() {
-    scavengerClient = CuratorFrameworkFactory.builder().
-      connectString(connectionString).
-      namespace(ZooCache.CACHE_ROOT).
-      retryPolicy(retryPolicy).
-      build
+  def initScavenger {
 
-    scavengerClient.start()
-    val scavenger=system.actorOf(Props(new Scavenger(scavengerClient)))
+    val scavenger=system.actorOf(Props(new Scavenger(unifiedClient)))
     val sched=system.scheduler.schedule(0 seconds,interval, scavenger, Tick)
   }
 
@@ -93,7 +90,7 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
     override def process(event: WatchedEvent) {
       try {
         //reset the watch as they are one-time
-        localInvalidationClient.getChildren.usingWatcher(watcher).forPath(systemInvalidationPath)
+        unifiedClient.getChildren.usingWatcher(watcher).forPath(systemInvalidationPath)
         //shadow.clear()
         shadowActor ! Clear()
       } catch {
@@ -114,15 +111,9 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
     if (useLocalShadow) initLocal
 
     def initLocal {
-      localInvalidationClient = CuratorFrameworkFactory.builder().
-        connectString(connectionString).
-        namespace(ZooCache.INVALIDATE_PATH).
-        retryPolicy(retryPolicy).
-        build
 
-      localInvalidationClient.start()
-      ensurePath(localInvalidationClient,systemInvalidationPath)
-      localInvalidationClient.getChildren.usingWatcher(watcher).forPath(systemInvalidationPath)
+      ensurePath(unifiedClient,systemInvalidationPath)
+      unifiedClient.getChildren.usingWatcher(watcher).forPath(systemInvalidationPath)
     }
   }
 
@@ -133,10 +124,10 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
 
   //todo:add invalidate by id
   def invalidate(){
-    if (localInvalidationClient.checkExists.forPath(systemInvalidationPath+"/doit")==null)
-      localInvalidationClient.create().forPath(systemInvalidationPath+"/doit")
+    if (unifiedClient.checkExists.forPath(systemInvalidationPath+"/doit")==null)
+      unifiedClient.create().forPath(systemInvalidationPath+"/doit")
     else
-      localInvalidationClient.delete().forPath(systemInvalidationPath+"/doit")
+      unifiedClient.delete().forPath(systemInvalidationPath+"/doit")
   }
 
   def doesExist(key : String) : Boolean =  if (client.checkExists().forPath("/"+key)!=null) true else false
@@ -283,7 +274,6 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
   def shutdown(){
     system.shutdown()
     client.close()
-    if(useLocalShadow)  localInvalidationClient.close()
-    scavengerClient.close()
+    unifiedClient.close()
   }
 }
