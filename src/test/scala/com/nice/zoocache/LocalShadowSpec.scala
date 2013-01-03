@@ -21,11 +21,7 @@ package com.nice.zoocache
 import org.scalatest.FunSpec
 import com.netflix.curator.test.TestingServer
 
-/**
- * User: arnonrgo
- * Date: 12/27/12
- * Time: 2:15 PM
- */
+
 class LocalShadowSpec extends FunSpec {
   val server=new TestingServer()
   val testCluster=server.getConnectString

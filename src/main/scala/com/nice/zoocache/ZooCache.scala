@@ -24,7 +24,6 @@ import com.netflix.curator.retry.ExponentialBackoffRetry
 import org.msgpack.ScalaMessagePack._
 import collection.JavaConversions._
 import org.apache.zookeeper.{WatchedEvent, Watcher}
-import java.util.Date
 import com.netflix.curator.framework
 import framework.{CuratorFramework, CuratorFrameworkFactory}
 import grizzled.slf4j.Logging
@@ -32,7 +31,7 @@ import akka.actor.{Props, ActorSystem}
 import akka.pattern.ask
 import akka.dispatch.Await
 import akka.util.duration._
-import akka.util.Timeout
+import akka.util.{Duration, Timeout}
 
 /**
  * User: arnonrgo
@@ -40,7 +39,7 @@ import akka.util.Timeout
  * Time: 10:47 AM
  */
 
-//todo: add scavenger to clean ZooCache (cluster of scavangers on all connected clients with leader election)
+//todo: add scavenger to clean ZooCache (cluster of scavengers on all connected clients with leader election)
 //todo: API to retrieve Metadata only
 //todo: renew zooKeeper connection after it failed on a new access
 //todo: change ZooCahce interface to return Future instead of Option (possibly unite java and scala interfaces)
@@ -48,16 +47,19 @@ import akka.util.Timeout
 //todo: consider replacing curator with util-zk (at least for the simple access stuff) ??
 //todo: add ACL support in the API
 //todo: add multitenancy support
+//todo move scavenger interval setting to the scavenger so it can be synchronized across the system
 
 
 
 object ZooCache  {
     val FOREVER : Long= -2
-    private val TTL_PATH = "/ttl"
-    private val CACHE_ROOT = "/cache/"
+    private[zoocache] val TTL_PATH = "/ttl"
+    private val CACHE_ID = "cache"
+    private[zoocache] val CACHE_ROOT = "/"+CACHE_ID
     private val INVALIDATE_PATH="/invalidate"
 }
-class ZooCache(connectionString: String,systemId : String, localCacheSize: Int =1) extends ZCache with Logging {
+
+class ZooCache(connectionString: String,systemId : String, private val localCacheSize: Int =1,private val interval : Duration = 30 minutes) extends ZCache with Logging {
 
   private val useLocalShadow = localCacheSize>1
   private val retryPolicy = new ExponentialBackoffRetry(1000, 10)
@@ -65,9 +67,13 @@ class ZooCache(connectionString: String,systemId : String, localCacheSize: Int =
   private var localInvalidationClient: CuratorFramework = null
   buildClients()
 
+  private val system=ActorSystem(systemId)
+  private val scavenger=system.actorOf(Props(new Scavenger(client)))
+  private val sched=system.scheduler.schedule(0 seconds,interval, scavenger, Tick)
+
   lazy private val cacheSize=if (localCacheSize>=(Int.MaxValue/2)) Int.MaxValue else localCacheSize*2
-  lazy private val system=ActorSystem(systemId)
   lazy private val shadowActor=system.actorOf(Props(new LocalShadow(cacheSize)))
+
   lazy private val systemInvalidationPath=ZooCache.INVALIDATE_PATH +"/"+systemId
   implicit val timeout = Timeout(1 second)
   lazy private val watcher : Watcher = new Watcher() {
@@ -87,7 +93,7 @@ class ZooCache(connectionString: String,systemId : String, localCacheSize: Int =
     debug("(re)building clients")
     client = CuratorFrameworkFactory.builder().
       connectString(connectionString).
-      namespace(ZooCache.CACHE_ROOT+systemId).
+      namespace(ZooCache.CACHE_ROOT+"/"+systemId).
       retryPolicy(retryPolicy).
       build
 
