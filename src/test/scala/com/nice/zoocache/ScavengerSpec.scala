@@ -80,6 +80,8 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
     val newCache=new ZooCache(testCluster,path,interval = 50 milliseconds)
 
     addToCache(newCache,path)
+    checkCache(path)
+
     newCache.shutdown()
   }
 
@@ -93,22 +95,43 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
 
     Thread.sleep(100)
 
-    val children = client.getChildren().forPath("/"+path)
-    assert(children.size() == 1)
+  }
+
+
+  def checkCache(path: String,size :Int=1) {
+    val children = client.getChildren().forPath("/" + path)
+    assert(children.size() == size)
+    println(size)
     assert(children.get(0) == "1")
   }
 
   it("runs scavenger periodically") {
-    val path="another"
+    val path="repeater"
     val newCache=new ZooCache(testCluster,path,interval = 50 milliseconds)
     addToCache(newCache,path)
+    checkCache(path)
+
     addToCache(newCache,path)
+    Thread.sleep(100)
+    checkCache(path)
+
     newCache.shutdown()
 
   }
 
 
-  it("deosn't interfere with other caches") (pending)
+  it("one cache can clean all"){
+    val fastPath="fast"
+    val fast=new ZooCache(testCluster,fastPath,interval = 50 milliseconds)
+    val slowPath="slow"
+    val slow=new ZooCache(testCluster,slowPath,interval = 24 hours)
+    Thread.sleep(100)
+
+    addToCache(slow,slowPath)
+    addToCache(fast,fastPath)
+    checkCache(fastPath)
+    checkCache(slowPath)
+  }
   it("can handle items that have a parent") (pending)
 
   it("can coordinate with multiple Scavenger instances") (pending)

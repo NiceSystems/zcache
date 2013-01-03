@@ -64,12 +64,25 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
   private val useLocalShadow = localCacheSize>1
   private val retryPolicy = new ExponentialBackoffRetry(1000, 10)
   private var client : CuratorFramework  = null
+  private var scavengerClient :CuratorFramework = null
   private var localInvalidationClient: CuratorFramework = null
-  buildClients()
-
   private val system=ActorSystem(systemId)
-  private val scavenger=system.actorOf(Props(new Scavenger(client)))
-  private val sched=system.scheduler.schedule(0 seconds,interval, scavenger, Tick)
+
+  buildClients
+  initScavenger()
+
+
+  def initScavenger() {
+    scavengerClient = CuratorFrameworkFactory.builder().
+      connectString(connectionString).
+      namespace(ZooCache.CACHE_ROOT).
+      retryPolicy(retryPolicy).
+      build
+
+    scavengerClient.start()
+    val scavenger=system.actorOf(Props(new Scavenger(scavengerClient)))
+    val sched=system.scheduler.schedule(0 seconds,interval, scavenger, Tick)
+  }
 
   lazy private val cacheSize=if (localCacheSize>=(Int.MaxValue/2)) Int.MaxValue else localCacheSize*2
   lazy private val shadowActor=system.actorOf(Props(new LocalShadow(cacheSize)))
@@ -89,7 +102,7 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
     }
   }
 
-  private def buildClients() {
+  private def buildClients {
     debug("(re)building clients")
     client = CuratorFrameworkFactory.builder().
       connectString(connectionString).
@@ -98,9 +111,9 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
       build
 
     client.start()
-    if (useLocalShadow) initLocal()
+    if (useLocalShadow) initLocal
 
-    def initLocal() {
+    def initLocal {
       localInvalidationClient = CuratorFrameworkFactory.builder().
         connectString(connectionString).
         namespace(ZooCache.INVALIDATE_PATH).
@@ -270,5 +283,7 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
   def shutdown(){
     system.shutdown()
     client.close()
+    if(useLocalShadow)  localInvalidationClient.close()
+    scavengerClient.close()
   }
 }
