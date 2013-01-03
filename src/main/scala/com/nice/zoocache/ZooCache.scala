@@ -64,12 +64,12 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
   private val useLocalShadow = localCacheSize>1
   private val retryPolicy = new ExponentialBackoffRetry(1000, 10)
   private val system=ActorSystem(systemId)
-  private val unifiedClient = CuratorFrameworkFactory.builder().
+  private val client = CuratorFrameworkFactory.builder().
     connectString(connectionString).
     namespace(ZooCache.CACHE_ROOT).
     retryPolicy(retryPolicy).
     build
-  unifiedClient.start()
+  client.start()
 
   initScavenger
 
@@ -78,8 +78,8 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
   lazy private val shadowActor=system.actorOf(Props(new LocalShadow(cacheSize)))
   if (useLocalShadow) {
 
-    ensurePath(unifiedClient,systemInvalidationPath)
-    unifiedClient.getChildren.usingWatcher(watcher).forPath(systemInvalidationPath)
+    ensurePath(client,systemInvalidationPath)
+    client.getChildren.usingWatcher(watcher).forPath(systemInvalidationPath)
   }
   lazy private val systemInvalidationPath=ZooCache.INVALIDATE_PATH +"/"+systemId
   private val basePath=ZooCache.CACHE_ROOT+"/"+systemId
@@ -88,7 +88,7 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
     override def process(event: WatchedEvent) {
       try {
         //reset the watch as they are one-time
-        unifiedClient.getChildren.usingWatcher(watcher).forPath(systemInvalidationPath)
+        client.getChildren.usingWatcher(watcher).forPath(systemInvalidationPath)
         //shadow.clear()
         shadowActor ! Clear()
       } catch {
@@ -99,15 +99,11 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
 
   def initScavenger {
 
-    val scavenger=system.actorOf(Props(new Scavenger(unifiedClient)))
+    val scavenger=system.actorOf(Props(new Scavenger(client)))
     val sched=system.scheduler.schedule(0 seconds,interval, scavenger, Tick)
   }
 
-  private def buildClients {
-    debug("(re)building clients")
 
-
-  }
 
   private def ensurePath(cl:CuratorFramework, path:String) {
     val ensurePath = cl.newNamespaceAwareEnsurePath(path)
@@ -116,26 +112,13 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
 
   //todo:add invalidate by id
   def invalidate(){
-    if (unifiedClient.checkExists.forPath(systemInvalidationPath+"/doit")==null)
-      unifiedClient.create().forPath(systemInvalidationPath+"/doit")
+    if (client.checkExists.forPath(systemInvalidationPath+"/doit")==null)
+      client.create().forPath(systemInvalidationPath+"/doit")
     else
-      unifiedClient.delete().forPath(systemInvalidationPath+"/doit")
+      client.delete().forPath(systemInvalidationPath+"/doit")
   }
 
-  def doesExist(key : String) : Boolean =  if (unifiedClient.checkExists().forPath(basePath+key)!=null) true else false
-
-
-  def removeAll(parentKey: String) {
-    val path =basePath+parentKey
-    val children=unifiedClient.getChildren.forPath(path)
-
-
-    for (child <- children) {
-      for(grandchild <-unifiedClient.getChildren.forPath(path+"/"+child)) unifiedClient.delete().forPath(path+"/"+child+"/"+grandchild)
-      unifiedClient.delete().forPath(path+"/"+child)
-    }
-    unifiedClient.delete().inBackground().forPath(path)
-  }
+  def doesExist(key : String) : Boolean =  if (client.checkExists().forPath(basePath+key)!=null) true else false
 
 
 
@@ -145,10 +128,10 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
 
     try {
 
-      ensurePath(unifiedClient,path)
-      ensurePath(unifiedClient,ttlPath)
+      ensurePath(client,path)
+      ensurePath(client,ttlPath)
 
-      unifiedClient.inTransaction().
+      client.inTransaction().
           setData().forPath(path,input).
         and().
           setData().forPath(ttlPath,ttl).
@@ -168,9 +151,9 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
   private[zoocache] def  getBytes(key:String):Option[Array[Byte]] ={
     val path=basePath+key
     try {
-      if (unifiedClient.checkExists().forPath(path) == null) None
+      if (client.checkExists().forPath(path) == null) None
       else
-        Some(unifiedClient.getData.forPath(path))
+        Some(client.getData.forPath(path))
     } catch {
       case e: Exception => {
         error("can't update '"+ key+"' in Zookeeper",e)
@@ -255,19 +238,19 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
      remove(basePath+key)
 
     def remove(path :String){
-      val children=unifiedClient.getChildren.forPath(path)
+      val children=client.getChildren.forPath(path)
 
       for (child <- children) {
          removeItem(key+"/"+child)
        }
-      unifiedClient.delete().forPath(path)
-      shadowActor ! Remove(key)
+      client.delete().forPath(path)
+      if(useLocalShadow)  shadowActor ! Remove(key)
   }
 
   }
 
   def shutdown(){
     system.shutdown()
-    unifiedClient.close()
+    client.close()
   }
 }
