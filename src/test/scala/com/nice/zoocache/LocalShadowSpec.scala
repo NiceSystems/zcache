@@ -18,11 +18,11 @@ package com.nice.zoocache
  * @version %I%, %G%
  *          <p/>
  */
-import org.scalatest.FunSpec
+import org.scalatest.{BeforeAndAfterAll, FunSpec}
 import com.netflix.curator.test.TestingServer
 
 
-class LocalShadowSpec extends FunSpec {
+class LocalShadowSpec extends FunSpec with BeforeAndAfterAll{
   val server=new TestingServer()
   val testCluster=server.getConnectString
   //var testCluster="10.211.55.25:2181"
@@ -114,5 +114,10 @@ class LocalShadowSpec extends FunSpec {
     val thirdResult=cache.get[Test](key)
 
     assert(thirdResult.get.name==t.name)
+  }
+
+  override def afterAll{
+    cache.shutdown()
+    second.shutdown()
   }
 }

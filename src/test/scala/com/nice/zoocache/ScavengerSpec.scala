@@ -80,6 +80,7 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
     val newCache=new ZooCache(testCluster,path,interval = 50 milliseconds)
 
     addToCache(newCache,path)
+    newCache.shutdown()
   }
 
 
@@ -102,6 +103,7 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
     val newCache=new ZooCache(testCluster,path,interval = 50 milliseconds)
     addToCache(newCache,path)
     addToCache(newCache,path)
+    newCache.shutdown()
 
   }
 
@@ -114,6 +116,7 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
   override def afterAll{
     testSystem.shutdown()
     client.close()
+    cache.shutdown()
   }
 
 }

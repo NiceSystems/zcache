@@ -207,6 +207,9 @@ class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
   }
 
 
+  override def afterAll{
+    cache.shutdown()
+  }
 
 
 }

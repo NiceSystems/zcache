@@ -266,4 +266,9 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
     shadowActor ! Remove(key)
 
   }
+
+  def shutdown(){
+    system.shutdown()
+    client.close()
+  }
 }
