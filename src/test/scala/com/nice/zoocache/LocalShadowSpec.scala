@@ -62,7 +62,7 @@ class LocalShadowSpec extends FunSpec with BeforeAndAfterAll{
     t.name="remote"
     val key="expired"
 
-    second.put(key,t,10)
+    second.put(key,t,100)
     val firstResult=cache.get[Test](key)
     assert(firstResult.get.name===t.name)
 

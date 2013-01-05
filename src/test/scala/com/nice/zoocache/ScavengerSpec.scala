@@ -33,15 +33,16 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
   val server=new TestingServer()
   val testCluster=server.getConnectString
   private val retryPolicy = new ExponentialBackoffRetry(1000, 10)
-  val cache=new ZooCache(testCluster,"test")
+  val systemId="scavange"
+  val cache=new ZooCache(testCluster,systemId)
   val client = CuratorFrameworkFactory.builder().
     connectString(testCluster).
-    namespace("/cache").
     retryPolicy(retryPolicy).
     build
    client.start()
   implicit val  testSystem= ActorSystem();
   var testScavenger=TestActorRef(new Scavenger(client)).underlyingActor
+  Thread.sleep(100)
 
 
   it("can remove all items"){
@@ -50,12 +51,15 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
     for (i<-1 to 10)
       cache.put(i.toString,t,1)
 
+
+   val y=client.getChildren.forPath(ZooCache.CACHE_ROOT+"/"+systemId)
+    println(y.size())
     Thread.sleep(10)
 
     testScavenger.clean
 
-    println(client.getChildren().forPath("/test").size())
-    assert(client.getChildren().forPath("/test").isEmpty)
+    println(client.getChildren.forPath(ZooCache.CACHE_ROOT+"/"+systemId).size())
+    assert(client.getChildren.forPath(ZooCache.CACHE_ROOT+"/"+systemId).isEmpty)
   }
 
   it("doesn't remove items that aren't expired") {
@@ -69,7 +73,7 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
 
     testScavenger.clean
 
-    val children=client.getChildren().forPath("/test")
+    val children=client.getChildren.forPath(ZooCache.CACHE_ROOT+"/"+systemId)
     assert(children.size()==1)
     assert(children.get(0)=="1")
   }
@@ -99,7 +103,7 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
 
 
   def checkCache(path: String,size :Int=1) {
-    val children = client.getChildren().forPath("/" + path)
+    val children = client.getChildren.forPath(ZooCache.CACHE_ROOT+ "/" + path)
     assert(children.size() == size)
     println(size)
     assert(children.get(0) == "1")
@@ -134,9 +138,11 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
   }
   it("can handle items that have a parent") (pending)
 
-  it("can coordinate with multiple Scavenger instances") (pending)
 
-  override def afterAll{
+  it("can coordinate with multiple Scavenger instances") (pending)
+  it("scavenges tied to different zookeeper instances work in parallel") (pending)
+
+  override def afterAll(){
     testSystem.shutdown()
     client.close()
     cache.shutdown()

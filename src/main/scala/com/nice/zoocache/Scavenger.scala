@@ -39,11 +39,10 @@ class Scavenger(client : CuratorFramework) extends Actor with Logging{
   // leader elect an active scavanger
 
 
-  // reelect leader if a scavanger disappears
 
   private[zoocache] def clean{
 
-    cleaner("")
+    cleaner(ZooCache.CACHE_ROOT)
 
 
     def cleaner(path:String) {

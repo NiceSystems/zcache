@@ -48,8 +48,7 @@ import akka.util.{Duration, Timeout}
 //todo: add ACL support in the API
 //todo: add multitenancy support
 //todo move scavenger interval setting to the scavenger so it can be synchronized across the system
-
-
+//todo: refactor so that would be one zoocache actor and one localShadow
 
 object ZooCache  {
     val FOREVER : Long= -2
@@ -66,7 +65,6 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
   private val system=ActorSystem(systemId)
   private val client = CuratorFrameworkFactory.builder().
     connectString(connectionString).
-    namespace(ZooCache.CACHE_ROOT).
     retryPolicy(retryPolicy).
     build
   client.start()
@@ -82,7 +80,7 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
     client.getChildren.usingWatcher(watcher).forPath(systemInvalidationPath)
   }
   lazy private val systemInvalidationPath=ZooCache.INVALIDATE_PATH +"/"+systemId
-  private val basePath=ZooCache.CACHE_ROOT+"/"+systemId
+  private val basePath=ZooCache.CACHE_ROOT+"/"+systemId+"/"
   implicit val timeout = Timeout(1 second)
   lazy private val watcher : Watcher = new Watcher() {
     override def process(event: WatchedEvent) {
@@ -99,8 +97,8 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
 
   def initScavenger {
 
-    val scavenger=system.actorOf(Props(new Scavenger(client)))
-    val sched=system.scheduler.schedule(0 seconds,interval, scavenger, Tick)
+   val scavenger=system.actorOf(Props(new Scavenger(client)))
+   val sched=system.scheduler.schedule(0 seconds,interval, scavenger, Tick)
   }
 
 
