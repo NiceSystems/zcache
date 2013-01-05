@@ -5,6 +5,8 @@ import grizzled.slf4j.{Logging}
 import com.netflix.curator.framework.CuratorFramework
 import collection.JavaConversions._
 import org.msgpack.ScalaMessagePack._
+import com.netflix.curator.framework.recipes.leader.{LeaderSelector, LeaderSelectorListener}
+import com.netflix.curator.framework.state.ConnectionState
 
 
 /**
@@ -27,20 +29,34 @@ import org.msgpack.ScalaMessagePack._
  *          <p/>
  */
 
-case class Tick()
+case class Tick(system : String ,client : CuratorFramework)
 
-class Scavenger(client : CuratorFramework) extends Actor with Logging{
+
+class Scavenger extends Actor with Logging{
 
   protected def receive = {
-    case Tick => clean
+    case Tick(s,client) => {
+      val listener = new LeaderSelectorListener()
+      {
+        @Override
+        def takeLeadership( client :CuratorFramework)  {
+          debug("ticked by - "+s)
+          clean(client)
+        }
+
+        @Override
+        def stateChanged( client :CuratorFramework,  newState :ConnectionState)
+        {
+        }
+      }
+      val selector = new LeaderSelector(client, "/leader", listener)
+      //selector.autoRequeue()
+      selector.start()
+    }
   }
 
-  // form a cluster with other Zoocache clients
-  // leader elect an active scavanger
 
-
-
-  private[zoocache] def clean{
+  private[zoocache] def clean(client : CuratorFramework){
 
     cleaner(ZooCache.CACHE_ROOT)
 
@@ -49,8 +65,8 @@ class Scavenger(client : CuratorFramework) extends Actor with Logging{
     try{
       for (childPath<-client.getChildren().forPath(path)){
         val childFullPath=path+"/"+childPath
-        if ( checkTtl(childFullPath)) {
-          removeItem(childFullPath)
+        if ( checkTtl(childFullPath,client)) {
+          removeItem(childFullPath,client)
         }
         cleaner(childFullPath)
       }
@@ -63,7 +79,7 @@ class Scavenger(client : CuratorFramework) extends Actor with Logging{
     }
   }
 
-  private def checkTtl(basePath :String):Boolean = {
+  private def checkTtl(basePath :String,client : CuratorFramework):Boolean = {
     val path=basePath+ZooCache.TTL_PATH
    if (client.checkExists().forPath(path)== null) return false
 
@@ -79,12 +95,12 @@ class Scavenger(client : CuratorFramework) extends Actor with Logging{
     }
   }
 
-  private def removeItem(key: String) {
+  private def removeItem(key: String,client : CuratorFramework) {
      val path=if (key.startsWith("/")) key else  "/"+key
      val children=client.getChildren.forPath(path)
 
      for (child <- children) {
-       removeItem(key+"/"+child)
+       removeItem(key+"/"+child,client)
      }
      client.delete().forPath(path)
   }

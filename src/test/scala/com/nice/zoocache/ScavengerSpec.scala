@@ -41,7 +41,7 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
     build
    client.start()
   implicit val  testSystem= ActorSystem();
-  var testScavenger=TestActorRef(new Scavenger(client)).underlyingActor
+  var testScavenger=TestActorRef(new Scavenger).underlyingActor
   Thread.sleep(100)
 
 
@@ -56,7 +56,7 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
     println(y.size())
     Thread.sleep(10)
 
-    testScavenger.clean
+    testScavenger.clean(client)
 
     println(client.getChildren.forPath(ZooCache.CACHE_ROOT+"/"+systemId).size())
     assert(client.getChildren.forPath(ZooCache.CACHE_ROOT+"/"+systemId).isEmpty)
@@ -71,7 +71,7 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
 
     Thread.sleep(10)
 
-    testScavenger.clean
+    testScavenger.clean(client)
 
     val children=client.getChildren.forPath(ZooCache.CACHE_ROOT+"/"+systemId)
     assert(children.size()==1)
@@ -97,7 +97,7 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
     for (i <- 2 to 11)
       newCache.put(i.toString, t, 1)
 
-    Thread.sleep(100)
+    Thread.sleep(200)
 
   }
 
@@ -136,10 +136,18 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
     checkCache(fastPath)
     checkCache(slowPath)
   }
+
+
+
+  it("can coordinate with multiple Scavenger instances") {
+    val fastPath="fast"
+    val fast=new ZooCache(testCluster,fastPath,interval = 50 milliseconds)
+    val slowPath="slow"
+    val slow=new ZooCache(testCluster,slowPath,interval = 60 milli)
+    Thread.sleep(1000)
+  }
+
   it("can handle items that have a parent") (pending)
-
-
-  it("can coordinate with multiple Scavenger instances") (pending)
   it("scavenges tied to different zookeeper instances work in parallel") (pending)
 
   override def afterAll(){

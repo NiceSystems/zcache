@@ -56,13 +56,17 @@ object ZooCache  {
     private val CACHE_ID = "cache"
     private[zoocache] val CACHE_ROOT = "/"+CACHE_ID
     private val INVALIDATE_PATH=CACHE_ROOT+"/invalidate"
+
+    private val system=ActorSystem(CACHE_ID)
+    private val scavenger=system.actorOf(Props(new Scavenger))
+
+
 }
 
 class ZooCache(connectionString: String,systemId : String, private val localCacheSize: Int =1,private val interval : Duration = 30 minutes) extends ZCache with Logging {
 
   private val useLocalShadow = localCacheSize>1
   private val retryPolicy = new ExponentialBackoffRetry(1000, 10)
-  private val system=ActorSystem(systemId)
   private val client = CuratorFrameworkFactory.builder().
     connectString(connectionString).
     retryPolicy(retryPolicy).
@@ -73,7 +77,7 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
 
 
   lazy private val cacheSize=if (localCacheSize>=(Int.MaxValue/2)) Int.MaxValue else localCacheSize*2
-  lazy private val shadowActor=system.actorOf(Props(new LocalShadow(cacheSize)))
+  lazy private val shadowActor=ZooCache.system.actorOf(Props(new LocalShadow(cacheSize)))
   if (useLocalShadow) {
 
     ensurePath(client,systemInvalidationPath)
@@ -97,8 +101,7 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
 
   def initScavenger {
 
-   val scavenger=system.actorOf(Props(new Scavenger(client)))
-   val sched=system.scheduler.schedule(0 seconds,interval, scavenger, Tick)
+   val sched=ZooCache.system.scheduler.schedule(0 seconds,interval, ZooCache.scavenger, Tick(systemId,client))
   }
 
 
@@ -248,7 +251,6 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
   }
 
   def shutdown(){
-    system.shutdown()
     client.close()
   }
 }
