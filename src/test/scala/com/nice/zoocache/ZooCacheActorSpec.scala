@@ -25,39 +25,52 @@ import org.msgpack.ScalaMessagePack
 import scala.Some
 import java.lang.{String => JString}
 import scala.Predef.String
+import akka.util.duration._
+import akka.pattern.ask
 
-/**
- * User: arnonrgo
- * Date: 12/26/12
- * Time: 12:01 PM
- */
-class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
+
+import akka.actor.ActorSystem
+import akka.testkit.TestActorRef
+import akka.dispatch.Await
+import java.util.UUID
+import akka.util.Timeout
+import com.nice.zoocache
+
+class ZooCacheActorSpec extends FunSpec with BeforeAndAfterAll {
 
   var server=new TestingServer()
   var testCluster=server.getConnectString
   //var testCluster="hadoop2"
-  var cache=new ZooCache(testCluster,"test")
+  implicit val  testSystem= ActorSystem();
+  var testCache=TestActorRef(new ZooCacheActor)
+  var id : UUID = null
+  implicit val timeout = Timeout(1 hour)
 
-  it("should connect to the cluster"){
-    val tempCache=new ZooCache(testCluster,"test")
+
+  override def beforeAll()={
+     id = Await.result(testCache ? Register("test",testCluster,false), 1 hour).asInstanceOf[UUID]
   }
+
 
   it("should do a simple put/get Bytes"){
     val t=new Test()
     t.name="Arnon"
     val ttl=new ItemMetadata()
 
-    cache.putBytes("test",ScalaMessagePack.write(t),ScalaMessagePack.write(ttl))
-    val value = cache.getBytes("test")
+    testCache ! Put(id,"test",ScalaMessagePack.write(t),ZooCache.FOREVER)
+    val value = Await.result(testCache ? GetValue(id,"test"), 1 hour).asInstanceOf[Option[Array[Byte]]]
     value match {
       case Some(result) => assert(unpack[Test](result).name===t.name)
       case None => assert(false)
     }
-
-
   }
 
-   it("should be able to write twice to same key (last wins)"){
+  it("can remove") (pending)
+  it("can check esitance") (pending)
+  it("can invalidate")
+  it("can serve more than one connection") (pending)
+  /*
+  it("should be able to write twice to same key (last wins)"){
     val t=new Test()
     t.name="Arnon"
     val key="myValue"
@@ -114,16 +127,16 @@ class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
     assert(cache.get[Test](parent,key1).get.name===t1.name)
   }
 
-   it("can verify an item is in the cache"){
-     val t1=new Test()
-     t1.name="first"
-     val key ="k"
-     cache.put(key,t1)
+  it("can verify an item is in the cache"){
+    val t1=new Test()
+    t1.name="first"
+    val key ="k"
+    cache.put(key,t1)
 
-     assert(cache.doesExist(key))
-     assert(!cache.doesExist("blah"))
+    assert(cache.doesExist(key))
+    assert(!cache.doesExist("blah"))
 
-   }
+  }
 
   it("can get remove all for a parent key"){
     val t1=new Test()
@@ -207,9 +220,9 @@ class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
   }
 
   it("throws exception if bad zookeeper connection") (pending)
-
+    */
   override def afterAll{
-    cache.shutdown()
+     testCache ! Shutdown
   }
 
 

@@ -39,9 +39,7 @@ import akka.util.{Duration, Timeout}
  * Time: 10:47 AM
  */
 
-//todo: add scavenger to clean ZooCache (cluster of scavengers on all connected clients with leader election)
 //todo: API to retrieve Metadata only
-//todo: renew zooKeeper connection after it failed on a new access
 //todo: change ZooCahce interface to return Future instead of Option (possibly unite java and scala interfaces)
 //todo: api to invalidate specific items
 //todo: consider replacing curator with util-zk (at least for the simple access stuff) ??
@@ -57,7 +55,7 @@ object ZooCache  {
     private[zoocache] val CACHE_ROOT = "/"+CACHE_ID
     private val INVALIDATE_PATH=CACHE_ROOT+"/invalidate"
 
-    private val system=ActorSystem(CACHE_ID)
+    private[zoocache] val system=ActorSystem(CACHE_ID)
     private val scavenger=system.actorOf(Props(new Scavenger))
 
 
@@ -65,7 +63,7 @@ object ZooCache  {
 
 class ZooCache(connectionString: String,systemId : String, private val localCacheSize: Int =1,private val interval : Duration = 30 minutes) extends ZCache with Logging {
 
-  private val useLocalShadow = localCacheSize>1
+
   private val retryPolicy = new ExponentialBackoffRetry(1000, 10)
   private val client = CuratorFrameworkFactory.builder().
     connectString(connectionString).
@@ -75,9 +73,9 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
 
   initScavenger
 
-
+  private val useLocalShadow = localCacheSize>1
   lazy private val cacheSize=if (localCacheSize>=(Int.MaxValue/2)) Int.MaxValue else localCacheSize*2
-  lazy private val shadowActor=ZooCache.system.actorOf(Props(new LocalShadow(cacheSize)))
+  lazy private val shadowActor=ZooCache.system.actorOf(Props(new LocalShadow(cacheSize)), name = "LocalShadow")
   if (useLocalShadow) {
 
     ensurePath(client,systemInvalidationPath)
@@ -92,7 +90,7 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
         //reset the watch as they are one-time
         client.getChildren.usingWatcher(watcher).forPath(systemInvalidationPath)
         //shadow.clear()
-        shadowActor ! Clear()
+        shadowActor ! ClearMemory()
       } catch {
         case e: InterruptedException =>  error("problem processing invalidation event",e)
       }
@@ -178,15 +176,15 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
 
 
   private def putLocalCopy(key: String, input: Any, meta: ItemMetadata) {
-    shadowActor ! Update(key,input)
-    shadowActor ! Update(key + ZooCache.TTL_PATH, meta)
+    shadowActor ! UpdateLocal(key,input)
+    shadowActor ! UpdateLocal(key + ZooCache.TTL_PATH, meta)
   }
 
   def get[T<:AnyRef](key: String)(implicit manifest : Manifest[T]):Option[T] = {
 
     def isInShadow:Boolean ={
       if (!useLocalShadow) return false
-      val reply=Await.result(shadowActor ? Get(key+ZooCache.TTL_PATH), 1 second).asInstanceOf[Option[ItemMetadata]]
+      val reply=Await.result(shadowActor ? GetLocal(key+ZooCache.TTL_PATH), 1 second).asInstanceOf[Option[ItemMetadata]]
      reply match
      {
         case Some(metadata)=>  metadata.isValid
@@ -212,7 +210,7 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
        }
     }
 
-    if (isInShadow) return  Await.result(shadowActor ? Get(key), 1 second).asInstanceOf[Option[T]]
+    if (isInShadow) return  Await.result(shadowActor ? GetLocal(key), 1 second).asInstanceOf[Option[T]]
 
     isInCache match{
       case None => None
@@ -245,7 +243,7 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
          removeItem(key+"/"+child)
        }
       client.delete().forPath(path)
-      if(useLocalShadow)  shadowActor ! Remove(key)
+      if(useLocalShadow)  shadowActor ! RemoveLocal(key)
   }
 
   }

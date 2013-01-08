@@ -24,11 +24,11 @@ import grizzled.slf4j.Logging
 import akka.actor.Actor
 
 
-case class Remove(k:String)
-case class Update(k:String,v:Any)
-case class Contains(k:String)
-case class Clear()
-case class Get(k:String)
+case class RemoveLocal(k:String)
+case class UpdateLocal(k:String,v:Any)
+case class HasLocalCopy(k:String)
+case class ClearMemory()
+case class GetLocal(k:String)
 
 
 /**
@@ -41,11 +41,11 @@ private class LocalShadow(size: Int) extends Actor with Logging {
   private val map= new LRUMap(size)
 
   def receive = {
-    case Remove(k) => remove(k)
-    case Update(k,v) => update(k,v)
-    case Contains(k) => sender ! contains(k)
-    case Clear() => clear()
-    case Get(k:String) => sender ! getObject(k)
+    case RemoveLocal(k) => remove(k)
+    case UpdateLocal(k,v) => update(k,v)
+    case HasLocalCopy(k) => sender ! contains(k)
+    case ClearMemory() => clear()
+    case GetLocal(k:String) => sender ! getObject(k)
   }
   private def clear(){
     map.clear()
