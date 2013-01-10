@@ -37,9 +37,9 @@ class ZooCacheActor extends Actor with Logging {
   implicit val timeout = Timeout(1 second)
 
   val shadowActor:ActorRef = context.actorFor("../LocalShadow")
-  val retryPolicy = new ExponentialBackoffRetry(1000, 10)
 
-  var connections = Map[String,CuratorFramework]()
+
+  var connections = Map[String,Option[CuratorFramework]]()
   var registration = Map[UUID,(String, String, Boolean)]()
 
 
@@ -49,7 +49,7 @@ class ZooCacheActor extends Actor with Logging {
       case GetValue(instance,key)=> sender ! get(instance,key)
       case RemoveKey(instance,key)=> removeItem(instance,key)
       case Exists(instance,key) => sender ! doesExist(instance,key)
-      case Shutdown() =>  connections.values.foreach(_.close())
+      case Shutdown() =>  connections.values.foreach(_.get.close())
       case Register(basePath,connection,useLocalShadow) => sender ! register(basePath,connection,useLocalShadow)
 
     }
@@ -60,18 +60,29 @@ class ZooCacheActor extends Actor with Logging {
     registration = registration+ (id -> (path,zookeeperConnection,useLocalShadow))
     id
   }
-  private def getConnection(instance : UUID): CuratorFramework = {
+  private def getConnection(instance : UUID): Option[CuratorFramework] = {
 
     val (_,connectionString,_) = registration(instance)
 
-    def establishConnection= {
+    def establishConnection = {
+       val retryPolicy = new ExponentialBackoffRetry(100,3)
+      //val retryPolicy = new com.netflix.curator.retry.RetryOneTime(100)
         val newConn = CuratorFrameworkFactory.builder().
           connectString(connectionString).
-          retryPolicy(retryPolicy).
+          retryPolicy(retryPolicy).connectionTimeoutMs(1000).
           build
+        try {
         newConn.start()
-        connections= connections + (connectionString->newConn)
-        newConn
+        newConn.checkExists.forPath(ZooCache.CACHE_ROOT)
+
+        connections= connections + (connectionString->Some(newConn))
+        Some(newConn)
+        } catch {
+          case e:Exception => {
+            error(e)
+            None
+          }
+        }
       }
 
     connections.getOrElse(connectionString,establishConnection)
@@ -84,25 +95,34 @@ class ZooCacheActor extends Actor with Logging {
 
   //todo:add invalidate by id
   def invalidate(instance : UUID, systemInvalidationPath : String){
-    val client = getConnection(instance)
-    if (client.checkExists.forPath(systemInvalidationPath+"/doit")==null)
-      client.create().forPath(systemInvalidationPath+"/doit")
-    else
-      client.delete().forPath(systemInvalidationPath+"/doit")
+    getConnection(instance) match {
+      case Some(client) => {
+          if (client.checkExists.forPath(systemInvalidationPath+"/doit")==null)
+            client.create().forPath(systemInvalidationPath+"/doit")
+          else
+            client.delete().forPath(systemInvalidationPath+"/doit")
+          }
+    }
   }
 
 
 
   def doesExist( instance :UUID,  key : String) : Boolean = {
-    val client = getConnection(instance)
     val (basePath,_,_)= registration(instance)
-    if (client.checkExists().forPath(basePath+key)!=null) true else false
+    getConnection(instance) match {
+      case Some(client) => if (client.checkExists().forPath(basePath+key)!=null) true else false
+      case None => false
+    }
   }
 
 
 
   def put(instance : UUID,key :String, input : Array[Byte], ttl: Long = ZooCache.FOREVER):Boolean ={
-    val client = getConnection(instance)
+    val hasClient=getConnection(instance)
+    if (hasClient.isEmpty) return false
+
+    val client =  hasClient.get
+
     val (basePath,_,useLocalShadow)= registration(instance)
 
     def putBytes (input :Array[Byte],ttl: Array[Byte]):Boolean  ={
@@ -150,8 +170,10 @@ class ZooCacheActor extends Actor with Logging {
   }
 
   def get(instance : UUID, key: String) : Option[Array[Byte]]= {
+    val hasClient=getConnection(instance)
+    if (hasClient.isEmpty) return None
+    val client =  hasClient.get
 
-    val client = getConnection(instance)
     val (basePath,_,useLocalShadow)= registration(instance)
      def  getBytes(path : String) :Option[Array[Byte]] ={
       val fullPath=basePath+path
@@ -206,27 +228,36 @@ class ZooCacheActor extends Actor with Logging {
 
 
   def removeItem(instance : UUID, key: String) {
-    val client = getConnection(instance)
-    val (basePath,_,useLocalShadow)= registration(instance)
-    remove(basePath+key)
+    val hasClient=getConnection(instance)
+    if (hasClient.isEmpty) return
 
+    val client =  hasClient.get
+
+    val (basePath,_,useLocalShadow)= registration(instance)
+    if (doesExist(instance,key))  remove(basePath+key)
+
+    def deleteNode(path: String) {
+      client.inTransaction().
+        delete().forPath(path + ZooCache.TTL_PATH).
+        and().
+        delete().forPath(path).
+        and().
+        commit()
+
+      if (useLocalShadow) {
+        shadowActor ! RemoveLocal(key)
+        shadowActor ! RemoveLocal(key + ZooCache.TTL_PATH)
+      }
+    }
     def remove(path :String){
       val children=client.getChildren.forPath(path)
 
       for (child <- children) {
-        remove(path+"/"+child)
-      }
+        if (child!=ZooCache.TTL_PATH) {
+              remove(path+"/"+child)
 
-      client.inTransaction().
-         delete().forPath(path).
-        and().
-         delete().forPath(path+ZooCache.TTL_PATH).
-        and().
-        commit()
-
-      if(useLocalShadow) {
-         shadowActor ! RemoveLocal(key)
-         shadowActor ! RemoveLocal(key+ZooCache.TTL_PATH)
+              deleteNode(path)
+        }
       }
     }
 

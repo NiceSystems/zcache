@@ -19,7 +19,7 @@ package com.nice.zoocache
  *          <p/>
  */
 import org.scalatest.{BeforeAndAfterAll, FunSpec}
-import com.netflix.curator.test.TestingServer
+import com.netflix.curator.test.{TestingCluster, TestingServer}
 import org.msgpack.ScalaMessagePack._
 import org.msgpack.ScalaMessagePack
 import scala.Some
@@ -55,7 +55,6 @@ class ZooCacheActorSpec extends FunSpec with BeforeAndAfterAll {
   it("should do a simple put/get Bytes"){
     val t=new Test()
     t.name="Arnon"
-    val ttl=new ItemMetadata()
 
     testCache ! Put(id,"test",ScalaMessagePack.write(t),ZooCache.FOREVER)
     val value = Await.result(testCache ? GetValue(id,"test"), 1 hour).asInstanceOf[Option[Array[Byte]]]
@@ -65,164 +64,65 @@ class ZooCacheActorSpec extends FunSpec with BeforeAndAfterAll {
     }
   }
 
-  it("can remove") (pending)
-  it("can check esitance") (pending)
-  it("can invalidate")
-  it("can serve more than one connection") (pending)
-  /*
-  it("should be able to write twice to same key (last wins)"){
-    val t=new Test()
-    t.name="Arnon"
-    val key="myValue"
+  it("can remove items from cache") {
+      val t=new Test()
+      t.name="Arnon"
 
-    cache.put(key,t)
-
-    t.name="Not Arnon"
-    cache.put(key,t)
-
-
-    val result=cache.get[Test](key).get
-    assert(result.name!="Arnon")
-
-  }
-
-  it("should put an object and retrieve it"){
-    val t=new Test()
-    val key="myValue9"
-
-    t.name="MyName"
-
-    cache.put(key,t)
-
-    val value=cache.getBytes(key).get
-    assert(unpack[Test](value).name===t.name)
-  }
-
-  it("should get object back by generics"){
-    val t=new Test()
-    val key="myValue2"
-
-    t.name="MyName2"
-
-    cache.put(key,t)
-
-    val value = cache.get[Test](key).get
-    assert(value.name===t.name)
-  }
-
-  it("can put/get a 2 key hierarchy "){
-    val t1=new Test()
-    t1.name="first"
-
-    val t2=new Test()
-    t2.name="second"
-    val parent="parent"
-    val key1="child1"
-    val key2="child2"
-
-    cache.put(parent,key1,t1)
-    cache.put(parent,key2,t2)
-
-    assert(cache.get[Test](parent,key2).get.name===t2.name)
-    assert(cache.get[Test](parent,key1).get.name===t1.name)
-  }
-
-  it("can verify an item is in the cache"){
-    val t1=new Test()
-    t1.name="first"
-    val key ="k"
-    cache.put(key,t1)
-
-    assert(cache.doesExist(key))
-    assert(!cache.doesExist("blah"))
-
-  }
-
-  it("can get remove all for a parent key"){
-    val t1=new Test()
-    t1.name="first"
-
-    val t2=new Test()
-    t2.name="second"
-    val parent="newparent"
-    val key1="child1"
-    val key2="child2"
-
-    cache.put(parent,key1,t1)
-    cache.put(parent,key2,t2)
-
-    val results=cache.removeItem(parent)
-    assert(!cache.doesExist(parent+"/"+key1))
-  }
-
-  it("getBytes should retun null on invalid keys"){
-    assert(cache.getBytes("blah")==None)
-  }
-
-  it("should retun null on invalid keys"){
-    assert(cache.get[Test]("blah")==None)
-  }
-
-  it("should serve diffrent caches to different apps"){
-
-    val otherCache= new ZooCache(testCluster,"otherApp")
-    otherCache.put("1",new Test())
-
-    assert(cache.get[Test]("1")==None)
-  }
-
-
-  it("should serve same cache to different instances"){
-
-    val otherCache= new ZooCache(testCluster,"test")
-    val t=new Test()
-    t.name="same"
-    otherCache.put("1",t)
-
-    assert(cache.get[Test]("1").get.name==="same")
-  }
-
-  it("should do a simple put/get  with memory shadow"){
-    val t=new Test()
-    t.name="Arnon"
-    val shadowCache= new ZooCache(testCluster,"test",100)
-
-    shadowCache.put("test",t)
-    val value = shadowCache.get[Test]("test")
+      testCache ! Put(id,"test",ScalaMessagePack.write(t),ZooCache.FOREVER)
+    val value = Await.result(testCache ? GetValue(id,"test"), 1 hour).asInstanceOf[Option[Array[Byte]]]
     value match {
-      case Some(result) => assert(result.name===t.name)
+      case Some(result) => assert(unpack[Test](result).name===t.name)
       case None => assert(false)
     }
-
+      testCache ! RemoveKey(id,"test")
+      val value2 = Await.result(testCache ? GetValue(id,"test"), 1 hour).asInstanceOf[Option[Array[Byte]]]
+      value2 match {
+        case Some(result) => assert(false)
+        case None => assert(true)
+      }
 
   }
 
-  it("should expire value if TTL passed"){
-    val t1=new Test()
-    t1.name="old"
-    val key="expired"
-    cache.put(key,t1,5)
-
-    Thread.sleep(500)
-    val value=cache.get[Test](key)
-    assert(value==None)
+  it("can check exsitance") {
+    val t=new Test()
+    t.name="Arnon"
+    testCache ! Put(id,"test",ScalaMessagePack.write(t),ZooCache.FOREVER)
+    val value1 = Await.result(testCache ? Exists(id,"test"), 1 second).asInstanceOf[Boolean]
+    assert(value1)
+    val value2 = Await.result(testCache ? Exists(id,"blah"), 1 second).asInstanceOf[Boolean]
+    assert(!value2)
   }
 
-  it("can remove item"){
-    val t1=new Test()
-    t1.name="old"
-    val key="deleted"
-    cache.put(key,t1,ZooCache.FOREVER)
-    cache.removeItem(key)
+  it("can serve more than one connection") {
+    val server2=new TestingServer()
+    val testCluster2=server2.getConnectString
+    val id2 = Await.result(testCache ? Register("test",testCluster2,false), 1 hour).asInstanceOf[UUID]
 
-    val value=cache.get[Test](key)
-    assert(value==None)
+    val t=new Test()
+    t.name="Arnon"
+    testCache ! Put(id,"test-1",ScalaMessagePack.write(t),ZooCache.FOREVER)
+    testCache ! Put(id2,"test-2",ScalaMessagePack.write(t),ZooCache.FOREVER)
+    assert(Await.result(testCache ? Exists(id,"test-1"), 1 second).asInstanceOf[Boolean])
+    assert(!Await.result(testCache ? Exists(id2,"test-1"), 1 second).asInstanceOf[Boolean])
+    assert(Await.result(testCache ? Exists(id2,"test-2"), 1 second).asInstanceOf[Boolean])
+    assert(!Await.result(testCache ? Exists(id,"test-2"), 1 second).asInstanceOf[Boolean])
+
+    server2.close()
   }
 
-  it("throws exception if bad zookeeper connection") (pending)
-    */
+  it("doesn't fail on invalid connection"){
+    val id2 = Await.result(testCache ? Register("test","blah-cluster",false), 1 hour).asInstanceOf[UUID]
+
+    val t=new Test()
+    t.name="Arnon"
+    testCache ! Put(id2,"test-2",ScalaMessagePack.write(t),ZooCache.FOREVER)
+  }
+
+
+  it("doesn't fail on failed server") (pending)
   override def afterAll{
      testCache ! Shutdown
+    server.close()
   }
 
 
