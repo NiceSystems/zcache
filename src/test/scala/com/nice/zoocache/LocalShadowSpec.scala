@@ -44,8 +44,8 @@ class LocalShadowSpec extends FunSpec with BeforeAndAfterAll{
 
   it("should serve local copy if local copy is not expired") {
     val t=new Test()
-    t.name="remote"
-    val key="lchanged"
+    t.name="lremote"
+    val key="localValid"
 
     second.put(key,t,ZooCache.FOREVER)
     val firstResult=cache.get[Test](key)

@@ -160,16 +160,16 @@ class ZooCacheActor extends Actor with Logging {
     val wasSuccessful=putBytes(input,metaBytes)
 
     if (wasSuccessful && useLocalShadow) {
-      putLocalCopy(key, input, meta)
+      putLocalCopy(instance,key, input, meta)
     }
 
     wasSuccessful
   }
 
 
-  private def putLocalCopy(key: String, input: Array[Byte], meta: ItemMetadata) {
-    shadowActor ! UpdateLocal(key,input)
-    shadowActor ! UpdateLocal(key + ZooCache.TTL_PATH, meta)
+  private def putLocalCopy(id: UUID,key: String, input: Array[Byte], meta: ItemMetadata) {
+    shadowActor ! UpdateLocal(id.toString+key,input)
+    shadowActor ! UpdateLocal(id.toString+key+ ZooCache.TTL_PATH, meta)
   }
 
   def get(instance : UUID, key: String) : Option[Array[Byte]]= {
@@ -195,7 +195,7 @@ class ZooCacheActor extends Actor with Logging {
 
     def isInShadow:Boolean ={
       if (!useLocalShadow) return false
-      val reply=Await.result(shadowActor ? GetLocal(key+ZooCache.TTL_PATH), 1 second).asInstanceOf[Option[ItemMetadata]]
+      val reply=Await.result(shadowActor ? GetLocal(instance+key+ZooCache.TTL_PATH), 1 second).asInstanceOf[Option[ItemMetadata]]
       reply match
       {
         case Some(metadata)=>  metadata.isValid
@@ -214,14 +214,14 @@ class ZooCacheActor extends Actor with Logging {
     }
 
 
-    if (isInShadow) return  Await.result(shadowActor ? GetLocal(key), 1 second).asInstanceOf[Option[Array[Byte]]]
+    if (isInShadow) return  Await.result(shadowActor ? GetLocal(instance+key), 1 second).asInstanceOf[Option[Array[Byte]]]
 
     isInCache match{
       case None => None
       case Some(meta) => {
 
         val result=getBytes(key)
-        if (useLocalShadow) putLocalCopy(key,result.get,meta)
+        if (useLocalShadow) putLocalCopy(instance,key,result.get,meta)
         result
       }
     }
@@ -248,13 +248,13 @@ class ZooCacheActor extends Actor with Logging {
           and().
           commit()
 
-        if(useLocalShadow) shadowActor ! RemoveLocal(key + ZooCache.TTL_PATH)
+        if(useLocalShadow) shadowActor ! RemoveLocal(instance+key + ZooCache.TTL_PATH)
       } else {
         client.delete().forPath(path)
       }
 
       if (useLocalShadow) {
-        shadowActor ! RemoveLocal(key)
+        shadowActor ! RemoveLocal(instance+key)
 
       }
     }
