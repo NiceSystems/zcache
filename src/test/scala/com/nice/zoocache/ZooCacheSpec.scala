@@ -42,25 +42,22 @@ class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
     val tempCache=new ZooCache(testCluster,"test")
   }
 
-  it("should do a simple put/get Bytes"){
+  it("should get object back by generics"){
     val t=new Test()
-    t.name="Arnon"
-    val ttl=new ItemMetadata()
+    val key="myValue2"
 
-    cache.putBytes("test",ScalaMessagePack.write(t),ScalaMessagePack.write(ttl))
-    val value = cache.getBytes("test")
-    value match {
-      case Some(result) => assert(unpack[Test](result).name===t.name)
-      case None => assert(false)
-    }
+    t.name="MyName2"
 
+    cache.put(key,t)
 
+    val value = cache.get[Test](key).get
+    assert(value.name===t.name)
   }
 
    it("should be able to write twice to same key (last wins)"){
     val t=new Test()
     t.name="Arnon"
-    val key="myValue"
+    val key="sameKeyUpdate"
 
     cache.put(key,t)
 
@@ -73,29 +70,8 @@ class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
 
   }
 
-  it("should put an object and retrieve it"){
-    val t=new Test()
-    val key="myValue9"
 
-    t.name="MyName"
 
-    cache.put(key,t)
-
-    val value=cache.getBytes(key).get
-    assert(unpack[Test](value).name===t.name)
-  }
-
-  it("should get object back by generics"){
-    val t=new Test()
-    val key="myValue2"
-
-    t.name="MyName2"
-
-    cache.put(key,t)
-
-    val value = cache.get[Test](key).get
-    assert(value.name===t.name)
-  }
 
   it("can put/get a 2 key hierarchy "){
     val t1=new Test()
@@ -142,9 +118,7 @@ class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
     assert(!cache.doesExist(parent+"/"+key1))
   }
 
-  it("getBytes should retun null on invalid keys"){
-    assert(cache.getBytes("blah")==None)
-  }
+
 
   it("should retun null on invalid keys"){
     assert(cache.get[Test]("blah")==None)
@@ -172,7 +146,7 @@ class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
   it("should do a simple put/get  with memory shadow"){
     val t=new Test()
     t.name="Arnon"
-    val shadowCache= new ZooCache(testCluster,"test",100)
+    val shadowCache= new ZooCache(testCluster,"test",true)
 
     shadowCache.put("test",t)
     val value = shadowCache.get[Test]("test")
@@ -210,7 +184,7 @@ class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
   it("throws exception if bad zookeeper connection") (pending)
 
   override def afterAll{
-    cache.shutdown()
+   // cache.shutdown()
   }
 
 

@@ -26,8 +26,8 @@ class LocalShadowSpec extends FunSpec with BeforeAndAfterAll{
   val server=new TestingServer()
   val testCluster=server.getConnectString
   //var testCluster="10.211.55.25:2181"
-  val cache  = new ZooCache(testCluster,"test",100)
-  val second = new ZooCache(testCluster,"test",100)
+  val cache  = new ZooCache(testCluster,"test",true)
+  val second = new ZooCache(testCluster,"test",true)
 
 
 
@@ -119,7 +119,7 @@ class LocalShadowSpec extends FunSpec with BeforeAndAfterAll{
   it("can handle the same key in different caches") (pending) //change all calls to localShadow to concatenate the cacheId to the key
 
   override def afterAll{
-    cache.shutdown()
-    second.shutdown()
+  //  cache.shutdown()
+  //  second.shutdown()
   }
 }

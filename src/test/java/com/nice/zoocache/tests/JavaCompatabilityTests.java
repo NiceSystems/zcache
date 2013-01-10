@@ -18,9 +18,13 @@ package com.nice.zoocache.tests;
  * @version %I%, %G%
  *          <p/>
  */
+
 import com.netflix.curator.test.TestingServer;
 import com.nice.zoocache.JZooCache;
 import org.junit.Test;
+
+import java.io.IOException;
+import java.util.Date;
 
 import static org.junit.Assert.assertEquals;
 
@@ -39,7 +43,7 @@ public class JavaCompatabilityTests  {
     public JavaCompatabilityTests() throws Exception {
         server = new TestingServer();
         testCluster=server.getConnectString();
-        cache = new JZooCache(testCluster, "javaTest",100);
+        cache = new JZooCache(testCluster, "javaTest",false);
     }
 
 
@@ -70,6 +74,34 @@ public class JavaCompatabilityTests  {
         assertEquals(cls.longValue,result.longValue);
         assertEquals(cls.value.intValue,result.value.intValue);
         assertEquals(cls.listStrings.get(0),result.listStrings.get(0));
+    }
+
+    @Test
+    public void can_use_a_really_complex_class() throws IOException {
+        BaseRequest<TestPerson> personRequest=new BaseRequest<TestPerson>();
+        TestPerson person=new TestPerson(1,"Arnon",new Date());
+        Address adr=new Address();
+        adr.setCountry("Israel");
+        person.addAddress(adr);
+        personRequest.setBaseRequestBody(person);
+
+
+        cache.put("1",person);
+        //byte[] ser=msgpack.write(personRequest);
+
+
+        //BaseRequest<TestPerson> newPersonReq=msgpack.read(ser,BaseRequest.class);
+        //TestPerson newPerson=newPersonReq.getBaseRequestBody();
+        MyTestPerson newPerson= cache.get("1",MyTestPerson.class);
+        System.out.println(newPerson.getIdToAddress());
+
+
+        // Create templates for serializing/deserializing List and Map objects
+
+
+
+
+
     }
 
 

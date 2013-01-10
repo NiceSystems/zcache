@@ -33,10 +33,10 @@ import javax.xml.soap.SOAPMessage
  *
  * @param connectionString Zookeeper quorum connection string
  * @param systemId unique Id for the cache (provides a path in Zookeeper just for the app)
- * @param localCacheSize The size of the shadow copy of the Zookeeper cache (a local LRU cache)
+ * @param useLocalShadow Should the cache keep a local copy of values retrieved (a local LRU cache)
  */
-class JZooCache(connectionString: String,systemId : String, localCacheSize : Int){
-  lazy val cache= new ZooCache(connectionString,systemId, localCacheSize)
+class JZooCache(connectionString: String,systemId : String, useLocalShadow : Boolean){
+  lazy val cache= new ZooCache(connectionString,systemId, useLocalShadow)
 
 
   /**

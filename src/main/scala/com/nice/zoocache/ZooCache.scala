@@ -32,6 +32,7 @@ import akka.pattern.ask
 import akka.dispatch.Await
 import akka.util.duration._
 import akka.util.{Duration, Timeout}
+import java.util.UUID
 
 /**
  * User: arnonrgo
@@ -49,34 +50,35 @@ import akka.util.{Duration, Timeout}
 //todo: refactor so that would be one zoocache actor and one localShadow
 
 object ZooCache  {
-    val FOREVER : Long= -2
-    private[zoocache] val TTL_PATH = "/ttl"
-    private val CACHE_ID = "cache"
-    private[zoocache] val CACHE_ROOT = "/"+CACHE_ID
-    private[zoocache] val LOCALSHADOW =  "LocalShadow"
 
+
+  val FOREVER : Long= -2
+  private[zoocache] val TTL_PATH = "/ttl"
+  private val CACHE_ID = "cache"
+  private[zoocache] val CACHE_ROOT = "/"+CACHE_ID
+  private[zoocache] val LOCALSHADOW =  "LocalShadow"
+  private[zoocache] val SCAVENGER = "Scavenger"
   private val INVALIDATE_PATH=CACHE_ROOT+"/invalidate"
-    private val DEFAULT_LOCAL_CACHE_SIZE = 10000
+  private val DEFAULT_LOCAL_CACHE_SIZE = 10000
 
 
-    private[zoocache] val system=ActorSystem(CACHE_ID)
-    private val scavenger=system.actorOf(Props(new Scavenger))
-    private val shadowActor=ZooCache.system.actorOf(Props(new LocalShadow(DEFAULT_LOCAL_CACHE_SIZE)), name =LOCALSHADOW)
+  private[zoocache] val system=ActorSystem(CACHE_ID)
+  private val scavenger=system.actorOf(Props(new Scavenger),name=SCAVENGER)
+  private val shadowActor=system.actorOf(Props(new LocalShadow(DEFAULT_LOCAL_CACHE_SIZE)), name =LOCALSHADOW)
+  private val cache=system.actorOf(Props(new ZooCacheActor()))
+
 
 }
 
-class ZooCache(connectionString: String,systemId : String, private val localCacheSize: Int =1,private val interval : Duration = 30 minutes) extends ZCache with Logging {
+class ZooCache(connectionString: String,systemId : String, private val useLocalShadow: Boolean = false,private val interval : Duration = 30 minutes) extends ZCache with Logging {
+
+  val atMost=2 hours
+  implicit val timeout=Timeout(2 hours)
+
+  val id = Await.result(ZooCache.cache ? Register(systemId,connectionString,useLocalShadow), atMost).asInstanceOf[UUID]
 
 
-  private val retryPolicy = new ExponentialBackoffRetry(1000, 10)
-  private val client = CuratorFrameworkFactory.builder().
-    connectString(connectionString).
-    retryPolicy(retryPolicy).
-    build
-  client.start()
-
-  initScavenger
-
+  /*
   private val useLocalShadow = localCacheSize>1
   if (useLocalShadow) {
 
@@ -99,133 +101,32 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
     }
   }
 
-  def initScavenger {
-
-   val sched=ZooCache.system.scheduler.schedule(0 seconds,interval, ZooCache.scavenger, Tick(systemId,client))
-  }
+  */
 
 
-
-  private def ensurePath(cl:CuratorFramework, path:String) {
-    val ensurePath = cl.newNamespaceAwareEnsurePath(path)
-    ensurePath.ensure(cl.getZookeeperClient)
-  }
 
   //todo:add invalidate by id
   def invalidate(){
-    if (client.checkExists.forPath(systemInvalidationPath+"/doit")==null)
-      client.create().forPath(systemInvalidationPath+"/doit")
-    else
-      client.delete().forPath(systemInvalidationPath+"/doit")
+     val systemInvalidationPath=ZooCache.INVALIDATE_PATH+"/"+systemId
+     ZooCache.cache ! Invalidate(id,systemInvalidationPath)
   }
 
-  def doesExist(key : String) : Boolean =  if (client.checkExists().forPath(basePath+key)!=null) true else false
-
-
-
-  private[zoocache] def putBytes (key : String, input :Array[Byte],ttl: Array[Byte]):Boolean  ={
-    val path=basePath+key
-    val ttlPath=path+ZooCache.TTL_PATH
-
-    try {
-
-      ensurePath(client,path)
-      ensurePath(client,ttlPath)
-
-      client.inTransaction().
-          setData().forPath(path,input).
-        and().
-          setData().forPath(ttlPath,ttl).
-        and().
-          commit()
-
-      true
-    } catch {
-      case e: Exception => {
-        error("can't read '"+key+"' from Zookeeper",e)
-        false
-      }
-    }
+  def doesExist(key : String) : Boolean =  {
+    Await.result(ZooCache.cache ? Exists(id,key),atMost).asInstanceOf[Boolean]
   }
 
-
-  private[zoocache] def  getBytes(key:String):Option[Array[Byte]] ={
-    val path=basePath+key
-    try {
-      if (client.checkExists().forPath(path) == null) None
-      else
-        Some(client.getData.forPath(path))
-    } catch {
-      case e: Exception => {
-        error("can't update '"+ key+"' in Zookeeper",e)
-        None
-      }
-    }
-
-  }
 
   def put(key :String, input : Any, ttl: Long = ZooCache.FOREVER):Boolean ={
-    val meta=new ItemMetadata()
-    meta.ttl= ttl
-    val wasSuccessful=putBytes(key,pack(input),pack(meta))
+    Await.result(ZooCache.cache ? Put(id,key,pack(input),ttl), atMost).asInstanceOf[Boolean]
 
-    if (wasSuccessful && useLocalShadow) {
-          putLocalCopy(key, input, meta)
-    }
-
-    wasSuccessful
   }
-
-
-  private def putLocalCopy(key: String, input: Any, meta: ItemMetadata) {
-    ZooCache.shadowActor ! UpdateLocal(key,input)
-    ZooCache.shadowActor ! UpdateLocal(key + ZooCache.TTL_PATH, meta)
-  }
-
-
 
   def get[T<:AnyRef](key: String)(implicit manifest : Manifest[T]):Option[T] = {
-
-    def isInShadow:Boolean ={
-      if (!useLocalShadow) return false
-      val reply=Await.result(ZooCache.shadowActor ? GetLocal(key+ZooCache.TTL_PATH), 1 second).asInstanceOf[Option[ItemMetadata]]
-     reply match
-     {
-        case Some(metadata)=>  metadata.isValid
-        case None =>  false
-      }
-    }
-
-    def isInCache:Option[ItemMetadata] ={
-      getBytes(key+ZooCache.TTL_PATH) match {
-        case Some(meta) => {
-                val result=unpack[ItemMetadata](meta)
-                if (result.isValid) Some(result) else None
-        }
-        case None =>None
-        }
-    }
-
-    def getData:Option[T]={
-      val data = getBytes(key)
-      data match {
-      case Some(result) =>  Some(unpack[T](result))
-      case None => None  // key not found
-       }
-    }
-
-    if (isInShadow) return  Await.result(ZooCache.shadowActor ? GetLocal(key), 1 second).asInstanceOf[Option[T]]
-
-    isInCache match{
+    Await.result(ZooCache.cache ? GetValue(id,key), atMost).asInstanceOf[Option[Array[Byte]]] match {
+      case Some(result)=> Some(unpack[T](result))
       case None => None
-      case Some(meta) => {
-        val result=getData
-        if (useLocalShadow) putLocalCopy(key,result.get,meta)
-        result
-      }
     }
   }
-
   def get[T<:AnyRef](parentKey: String,key: String)(implicit manifest : Manifest[T]):Option[T] = {
     get[T](parentKey+"/"+key)
   }
@@ -238,21 +139,8 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
   }
 
   def removeItem(key: String) {
-     remove(basePath+key)
-
-    def remove(path :String){
-      val children=client.getChildren.forPath(path)
-
-      for (child <- children) {
-         removeItem(key+"/"+child)
-       }
-      client.delete().forPath(path)
-      if(useLocalShadow)  ZooCache.shadowActor ! RemoveLocal(key)
+    ZooCache.cache ! RemoveKey(id,key)
   }
 
-  }
 
-  def shutdown(){
-    client.close()
-  }
 }

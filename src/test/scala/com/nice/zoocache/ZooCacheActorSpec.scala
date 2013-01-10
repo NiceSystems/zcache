@@ -48,7 +48,7 @@ class ZooCacheActorSpec extends FunSpec with BeforeAndAfterAll {
 
 
   override def beforeAll()={
-     id = Await.result(testCache ? Register("test",testCluster,false), 1 hour).asInstanceOf[UUID]
+    id = Await.result(testCache ? Register("test",testCluster,false), 1 hour).asInstanceOf[UUID]
   }
 
 
@@ -60,6 +60,26 @@ class ZooCacheActorSpec extends FunSpec with BeforeAndAfterAll {
     val value = Await.result(testCache ? GetValue(id,"test"), 1 hour).asInstanceOf[Option[Array[Byte]]]
     value match {
       case Some(result) => assert(unpack[Test](result).name===t.name)
+      case None => assert(false)
+    }
+  }
+
+  it("should update values already in cache"){
+    val t=new Test()
+    t.name="Arnon"
+    val key="myValue"
+
+    testCache ! Put(id,"test",ScalaMessagePack.write(t),ZooCache.FOREVER)
+
+    t.name="Not Arnon"
+    testCache ! Put(id,"test",ScalaMessagePack.write(t),ZooCache.FOREVER)
+
+    val value = Await.result(testCache ? GetValue(id,"test"), 1 hour).asInstanceOf[Option[Array[Byte]]]
+    value match {
+      case Some(result) => {
+        val name=unpack[Test](result).name
+        assert(name===t.name)
+      }
       case None => assert(false)
     }
   }

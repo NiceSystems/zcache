@@ -29,18 +29,17 @@ import com.netflix.curator.framework.state.ConnectionState
  *          <p/>
  */
 
-case class Tick(system : String ,client : CuratorFramework)
+case class Tick(client : CuratorFramework)
 
 
 class Scavenger extends Actor with Logging{
 
   protected def receive = {
-    case Tick(s,client) => {
+    case Tick(client) => {
       val listener = new LeaderSelectorListener()
       {
         @Override
         def takeLeadership( client :CuratorFramework)  {
-          debug("ticked by - "+s)
           clean(client)
         }
 

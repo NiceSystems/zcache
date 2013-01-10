@@ -86,7 +86,7 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
     addToCache(newCache,path)
     checkCache(path)
 
-    newCache.shutdown()
+    //newCache.shutdown()
   }
 
 
@@ -119,7 +119,7 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
     Thread.sleep(100)
     checkCache(path)
 
-    newCache.shutdown()
+  //  newCache.shutdown()
 
   }
 
@@ -153,7 +153,7 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
   override def afterAll(){
     testSystem.shutdown()
     client.close()
-    cache.shutdown()
+   // cache.shutdown()
   }
 
 }
