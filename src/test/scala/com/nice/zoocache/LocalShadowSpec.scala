@@ -116,6 +116,8 @@ class LocalShadowSpec extends FunSpec with BeforeAndAfterAll{
     assert(thirdResult.get.name==t.name)
   }
 
+  it("can handle the same key in different caches") (pending) //change all calls to localShadow to concatenate the cacheId to the key
+
   override def afterAll{
     cache.shutdown()
     second.shutdown()

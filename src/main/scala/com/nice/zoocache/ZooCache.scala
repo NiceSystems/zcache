@@ -53,11 +53,15 @@ object ZooCache  {
     private[zoocache] val TTL_PATH = "/ttl"
     private val CACHE_ID = "cache"
     private[zoocache] val CACHE_ROOT = "/"+CACHE_ID
-    private val INVALIDATE_PATH=CACHE_ROOT+"/invalidate"
+    private[zoocache] val LOCALSHADOW =  "LocalShadow"
+
+  private val INVALIDATE_PATH=CACHE_ROOT+"/invalidate"
+    private val DEFAULT_LOCAL_CACHE_SIZE = 10000
+
 
     private[zoocache] val system=ActorSystem(CACHE_ID)
     private val scavenger=system.actorOf(Props(new Scavenger))
-
+    private val shadowActor=ZooCache.system.actorOf(Props(new LocalShadow(DEFAULT_LOCAL_CACHE_SIZE)), name =LOCALSHADOW)
 
 }
 
@@ -74,8 +78,6 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
   initScavenger
 
   private val useLocalShadow = localCacheSize>1
-  lazy private val cacheSize=if (localCacheSize>=(Int.MaxValue/2)) Int.MaxValue else localCacheSize*2
-  lazy private val shadowActor=ZooCache.system.actorOf(Props(new LocalShadow(cacheSize)), name = "LocalShadow")
   if (useLocalShadow) {
 
     ensurePath(client,systemInvalidationPath)
@@ -90,7 +92,7 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
         //reset the watch as they are one-time
         client.getChildren.usingWatcher(watcher).forPath(systemInvalidationPath)
         //shadow.clear()
-        shadowActor ! ClearMemory()
+        ZooCache.shadowActor ! ClearMemory()
       } catch {
         case e: InterruptedException =>  error("problem processing invalidation event",e)
       }
@@ -176,8 +178,8 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
 
 
   private def putLocalCopy(key: String, input: Any, meta: ItemMetadata) {
-    shadowActor ! UpdateLocal(key,input)
-    shadowActor ! UpdateLocal(key + ZooCache.TTL_PATH, meta)
+    ZooCache.shadowActor ! UpdateLocal(key,input)
+    ZooCache.shadowActor ! UpdateLocal(key + ZooCache.TTL_PATH, meta)
   }
 
 
@@ -186,7 +188,7 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
 
     def isInShadow:Boolean ={
       if (!useLocalShadow) return false
-      val reply=Await.result(shadowActor ? GetLocal(key+ZooCache.TTL_PATH), 1 second).asInstanceOf[Option[ItemMetadata]]
+      val reply=Await.result(ZooCache.shadowActor ? GetLocal(key+ZooCache.TTL_PATH), 1 second).asInstanceOf[Option[ItemMetadata]]
      reply match
      {
         case Some(metadata)=>  metadata.isValid
@@ -212,7 +214,7 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
        }
     }
 
-    if (isInShadow) return  Await.result(shadowActor ? GetLocal(key), 1 second).asInstanceOf[Option[T]]
+    if (isInShadow) return  Await.result(ZooCache.shadowActor ? GetLocal(key), 1 second).asInstanceOf[Option[T]]
 
     isInCache match{
       case None => None
@@ -245,7 +247,7 @@ class ZooCache(connectionString: String,systemId : String, private val localCach
          removeItem(key+"/"+child)
        }
       client.delete().forPath(path)
-      if(useLocalShadow)  shadowActor ! RemoveLocal(key)
+      if(useLocalShadow)  ZooCache.shadowActor ! RemoveLocal(key)
   }
 
   }

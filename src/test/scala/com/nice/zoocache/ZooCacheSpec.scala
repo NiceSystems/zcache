@@ -206,6 +206,7 @@ class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
     assert(value==None)
   }
 
+
   it("throws exception if bad zookeeper connection") (pending)
 
   override def afterAll{
