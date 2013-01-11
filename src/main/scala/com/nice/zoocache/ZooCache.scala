@@ -58,7 +58,7 @@ object ZooCache  {
   private[zoocache] val CACHE_ROOT = "/"+CACHE_ID
   private[zoocache] val LOCALSHADOW =  "LocalShadow"
   private[zoocache] val SCAVENGER = "Scavenger"
-  private val INVALIDATE_PATH=CACHE_ROOT+"/invalidate"
+  private[zoocache] val INVALIDATE_PATH=CACHE_ROOT+"/invalidate"
   private val DEFAULT_LOCAL_CACHE_SIZE = 10000
 
 
@@ -72,8 +72,8 @@ object ZooCache  {
 
 class ZooCache(connectionString: String,systemId : String, private val useLocalShadow: Boolean = false,private val interval : Duration = 30 minutes) extends ZCache with Logging {
 
-  val atMost=2 hours
-  implicit val timeout=Timeout(2 hours)
+  val atMost=2 seconds
+  implicit val timeout=Timeout(2 seconds)
 
   val id = Await.result(ZooCache.cache ? Register(systemId,connectionString,useLocalShadow), atMost).asInstanceOf[UUID]
 

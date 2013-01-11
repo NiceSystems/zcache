@@ -14,7 +14,7 @@ import akka.util.duration._
 import akka.pattern.ask
 import java.util.UUID
 import collection.JavaConversions._
-
+import com.netflix.curator.framework.api.CuratorWatcher
 
 
 /**
@@ -42,6 +42,7 @@ class ZooCacheActor extends Actor with Logging {
 
   var connections = Map[String,Option[CuratorFramework]]()
   var registration = Map[UUID,(String, String, Boolean)]()
+  var watchers = List[Watcher]()
 
 
     def receive ={
@@ -56,11 +57,46 @@ class ZooCacheActor extends Actor with Logging {
     }
 
   private def register(basePath : String, zookeeperConnection : String,useLocalShadow : Boolean) : UUID ={
+
+
     val id =UUID.randomUUID()
     val path=ZooCache.CACHE_ROOT+"/"+basePath+"/"
+    val invalidationPath= ZooCache.INVALIDATE_PATH+"/"+basePath
+
     registration = registration+ (id -> (path,zookeeperConnection,useLocalShadow))
+
+    if(useLocalShadow) setupInvalidation
+    def setupInvalidation{
+      getConnection(id) match {
+        case Some(client) => {
+          ensurePath(client,invalidationPath)
+          setupWatcher(client)
+        }
+      }
+    }
+
+
+    def setupWatcher(client : CuratorFramework) = {
+      lazy val watcher : Watcher= new Watcher() {
+        override def process(event: WatchedEvent) {
+          try {
+            //reset the watch as they are one-time
+            client.getChildren.usingWatcher(watcher).forPath(invalidationPath)
+            //shadow.clear()
+            shadowActor ! ClearMemory() // change to ClearMemory(id)
+          } catch {
+            case e: InterruptedException =>  error("problem processing invalidation event",e)
+          }
+        }
+      }
+      client.getChildren.usingWatcher(watcher).forPath(invalidationPath)
+      watchers = watcher :: watchers
+    }
+
     id
+
   }
+
   private def getConnection(instance : UUID): Option[CuratorFramework] = {
 
     val (_,connectionString,_) = registration(instance)
@@ -91,11 +127,34 @@ class ZooCacheActor extends Actor with Logging {
     connections.getOrElse(connectionString,establishConnection)
   }
 
+
   private def ensurePath(cl:CuratorFramework, path:String) {
     val ensurePath = cl.newNamespaceAwareEnsurePath(path)
     ensurePath.ensure(cl.getZookeeperClient)
   }
+  /*
+  private val useLocalShadow = localCacheSize>1
+  if (useLocalShadow) {
 
+    ensurePath(client,systemInvalidationPath)
+    client.getChildren.usingWatcher(watcher).forPath(systemInvalidationPath)
+  }
+  lazy private val systemInvalidationPath=ZooCache.INVALIDATE_PATH +"/"+systemId
+  private val basePath=ZooCache.CACHE_ROOT+"/"+systemId+"/"
+  implicit val timeout = Timeout(1 second)
+  lazy private val watcher : Watcher = new Watcher() {
+    override def process(event: WatchedEvent) {
+      try {
+        //reset the watch as they are one-time
+        client.getChildren.usingWatcher(watcher).forPath(systemInvalidationPath)
+        //shadow.clear()
+        ZooCache.shadowActor ! ClearMemory()
+      } catch {
+        case e: InterruptedException =>  error("problem processing invalidation event",e)
+      }
+    }
+  }
+  */
   //todo:add invalidate by id
   def invalidate(instance : UUID, systemInvalidationPath : String){
     getConnection(instance) match {
