@@ -40,14 +40,6 @@ import java.util.UUID
  * Time: 10:47 AM
  */
 
-//todo: API to retrieve Metadata only
-//todo: change ZooCahce interface to return Future instead of Option (possibly unite java and scala interfaces)
-//todo: api to invalidate specific items
-//todo: consider replacing curator with util-zk (at least for the simple access stuff) ??
-//todo: add ACL support in the API
-//todo: add multitenancy support
-//todo move scavenger interval setting to the scavenger so it can be synchronized across the system
-//todo: refactor so that would be one zoocache actor and one localShadow
 
 object ZooCache  {
 
