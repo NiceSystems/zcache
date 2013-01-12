@@ -1,7 +1,7 @@
 package com.nice.zoocache
 
 import akka.actor.Actor
-import grizzled.slf4j.{Logging}
+import grizzled.slf4j.Logging
 import com.netflix.curator.framework.CuratorFramework
 import collection.JavaConversions._
 import org.msgpack.ScalaMessagePack._
@@ -49,7 +49,6 @@ class Scavenger extends Actor with Logging{
         }
       }
       val selector = new LeaderSelector(client, "/leader", listener)
-      //selector.autoRequeue()
       selector.start()
     }
   }
@@ -59,49 +58,37 @@ class Scavenger extends Actor with Logging{
 
     cleaner(ZooCache.CACHE_ROOT)
 
-
-    def cleaner(path:String) {
-    try{
-      for (childPath<-client.getChildren().forPath(path)){
-        val childFullPath=path+"/"+childPath
-        if ( checkTtl(childFullPath,client)) {
-          removeItem(childFullPath,client)
+    def cleaner(path :String){
+      val children=client.getChildren.forPath(path)
+      for (child <- children) {
+        if ("/"+child!=ZooCache.TTL_PATH) {  //assumption only leaf nodes have ttl!
+          cleaner(path+"/"+child) }
+        else validateTtl(path)
         }
-        cleaner(childFullPath)
-      }
-    }  catch {
-        case e : Exception => error(e)
-      }
-    // get children
-    // foreach check Metadata and TTL
-    // if expired - remove item
-    }
-  }
-
-  private def checkTtl(basePath :String,client : CuratorFramework):Boolean = {
-    val path=basePath+ZooCache.TTL_PATH
-   if (client.checkExists().forPath(path)== null) return false
-
-    try{
-      val meta=unpack[ItemMetadata](client.getData().forPath(path))
-      !meta.isValid
-    }
-    catch {
-      case e : Exception => {
-           error(e)
-            false
-      }
-    }
-  }
-
-  private def removeItem(key: String,client : CuratorFramework) {
-     val path=if (key.startsWith("/")) key else  "/"+key
-     val children=client.getChildren.forPath(path)
-
-     for (child <- children) {
-       removeItem(key+"/"+child,client)
      }
-     client.delete().forPath(path)
-  }
+
+     def validateTtl(itemPath :String) {
+      val ttlPath=itemPath+ZooCache.TTL_PATH
+      if (client.checkExists().forPath(ttlPath)== null) return
+
+      try{
+        val meta=unpack[ItemMetadata](client.getData.forPath(ttlPath))
+        if (!meta.isValid) {
+          client.inTransaction().
+            delete().forPath(ttlPath).
+            and().
+            delete().forPath(itemPath).
+            and().
+            commit()}
+      }
+      catch {
+        case e : Exception => {
+          error(e)
+          false
+        }
+      }
+    }
+    }
+
 
 }

@@ -3,7 +3,7 @@ package com.nice.zoocache
 import org.scalatest.{BeforeAndAfterAll, FunSpec}
 import com.netflix.curator.test.TestingServer
 import akka.testkit.{TestKit, TestActorRef, TestActor}
-import com.netflix.curator.framework.CuratorFrameworkFactory
+import com.netflix.curator.framework.{CuratorFramework, CuratorFrameworkFactory}
 import com.netflix.curator.retry.ExponentialBackoffRetry
 import akka.actor.ActorSystem
 import akka.util.duration._
@@ -34,13 +34,13 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
   val testCluster=server.getConnectString
   private val retryPolicy = new ExponentialBackoffRetry(1000, 10)
   val systemId="scavange"
-  val cache=new ZooCache(testCluster,systemId)
+  val cache=new ZooCache(testCluster,systemId,maxWait = 10 seconds)
   val client = CuratorFrameworkFactory.builder().
     connectString(testCluster).
     retryPolicy(retryPolicy).
     build
    client.start()
-  implicit val  testSystem= ActorSystem();
+  implicit val  testSystem= ActorSystem()
   var testScavenger=TestActorRef(new Scavenger).underlyingActor
   Thread.sleep(100)
 
@@ -80,13 +80,18 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
 
   it("runs automatically in a ZooCache instance") {
     val path="independent"
-
-    val newCache=new ZooCache(testCluster,path,interval = 50 milliseconds)
+    val independentServer=new TestingServer(9998)
+    val newCache=new ZooCache(independentServer.getConnectString,path,interval = 50 milliseconds,maxWait = 1 hour)
+    val indie = CuratorFrameworkFactory.builder().
+      connectString(independentServer.getConnectString).
+      retryPolicy(retryPolicy).
+      build
+    indie.start()
 
     addToCache(newCache,path)
-    checkCache(path)
+    checkCache(path,1,indie)
 
-    //newCache.shutdown()
+    independentServer.close()
   }
 
 
@@ -102,8 +107,8 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
   }
 
 
-  def checkCache(path: String,size :Int=1) {
-    val children = client.getChildren.forPath(ZooCache.CACHE_ROOT+ "/" + path)
+  def checkCache(path: String,size :Int=1, cl : CuratorFramework = client) {
+    val children = cl.getChildren.forPath(ZooCache.CACHE_ROOT+ "/" + path)
     assert(children.size() == size)
     println(size)
     assert(children.get(0) == "1")
@@ -111,30 +116,47 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
 
   it("runs scavenger periodically") {
     val path="repeater"
-    val newCache=new ZooCache(testCluster,path,interval = 50 milliseconds)
+    val repeatServer=new TestingServer(9999)
+    val newCache=new ZooCache(repeatServer.getConnectString,path,interval = 50 milliseconds,maxWait = 1 hour)
     addToCache(newCache,path)
-    checkCache(path)
+    val repeatClient = CuratorFrameworkFactory.builder().
+      connectString(repeatServer.getConnectString).
+      retryPolicy(retryPolicy).
+      build
+    repeatClient.start()
+    checkCache(path,cl=repeatClient)
 
     addToCache(newCache,path)
     Thread.sleep(100)
-    checkCache(path)
+    checkCache(path,cl=repeatClient)
 
+    repeatServer.close()
+    repeatClient.close()
   //  newCache.shutdown()
 
   }
 
 
   it("one cache can clean all"){
+
+    val oneCache=new TestingServer(10000)
+    val oneClient = CuratorFrameworkFactory.builder().
+      connectString(oneCache.getConnectString).
+      retryPolicy(retryPolicy).
+      build
+    oneClient.start()
     val fastPath="fast"
-    val fast=new ZooCache(testCluster,fastPath,interval = 50 milliseconds)
+    val fast=new ZooCache(oneCache.getConnectString,fastPath,interval = 50 milliseconds,maxWait =  2 seconds)
     val slowPath="slow"
-    val slow=new ZooCache(testCluster,slowPath,interval = 24 hours)
+    val slow=new ZooCache(oneCache.getConnectString,slowPath,interval = 50 milliseconds,maxWait = 2 seconds)
     Thread.sleep(100)
 
     addToCache(slow,slowPath)
     addToCache(fast,fastPath)
-    checkCache(fastPath)
-    checkCache(slowPath)
+    checkCache(fastPath,cl=oneClient)
+    checkCache(slowPath,cl=oneClient)
+    oneCache.close()
+    oneClient.close()
   }
 
 
@@ -146,6 +168,8 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
     val slow=new ZooCache(testCluster,slowPath,interval = 60 milli)
     Thread.sleep(1000)
   }
+
+
 
   it("can handle items that have a parent") (pending)
   it("scavenges tied to different zookeeper instances work in parallel") (pending)
