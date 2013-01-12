@@ -78,34 +78,6 @@ class ZooCache(connectionString: String,systemId : String, private val useLocalS
   val id = Await.result(ZooCache.cache ? Register(systemId,connectionString,useLocalShadow,interval), atMost).asInstanceOf[UUID]
 
 
-  /*
-  private val useLocalShadow = localCacheSize>1
-  if (useLocalShadow) {
-
-    ensurePath(client,systemInvalidationPath)
-    client.getChildren.usingWatcher(watcher).forPath(systemInvalidationPath)
-  }
-  lazy private val systemInvalidationPath=ZooCache.INVALIDATE_PATH +"/"+systemId
-  private val basePath=ZooCache.CACHE_ROOT+"/"+systemId+"/"
-  implicit val timeout = Timeout(1 second)
-  lazy private val watcher : Watcher = new Watcher() {
-    override def process(event: WatchedEvent) {
-      try {
-        //reset the watch as they are one-time
-        client.getChildren.usingWatcher(watcher).forPath(systemInvalidationPath)
-        //shadow.clear()
-        ZooCache.shadowActor ! ClearMemory()
-      } catch {
-        case e: InterruptedException =>  error("problem processing invalidation event",e)
-      }
-    }
-  }
-
-  */
-
-
-
-  //todo:add invalidate by id
   def invalidate(){
      val systemInvalidationPath=ZooCache.INVALIDATE_PATH+"/"+systemId
      ZooCache.cache ! Invalidate(id,systemInvalidationPath)

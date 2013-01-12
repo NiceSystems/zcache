@@ -30,18 +30,18 @@ case class GetValue(instance : UUID,key: String)
 case class RemoveKey(instance : UUID,key: String)
 case class Shutdown()
 case class Exists(instance : UUID, key: String)
-case class Register(basePath : String, zookeeperConnection : String,useLocalShadow : Boolean)
+case class Register(basePath : String, zookeeperConnection : String,useLocalShadow : Boolean, interval : Duration = 30 minutes)
 
 class ZooCacheActor extends Actor with Logging {
 
   implicit val timeout = Timeout(1 second)
-  val interval = 30 minutes
+
   val shadowActor:ActorRef = context.actorFor("../"+ZooCache.LOCALSHADOW)
   val scavenger = context.actorFor("../"+ZooCache.SCAVENGER)
 
 
   var connections = Map[String,Option[CuratorFramework]]()
-  var registration = Map[UUID,(String, String, Boolean)]()
+  var registration = Map[UUID,(String, String, Boolean,Duration)]()
   var watchers = List[Watcher]()
 
 
@@ -52,18 +52,18 @@ class ZooCacheActor extends Actor with Logging {
       case RemoveKey(instance,key)=> removeItem(instance,key)
       case Exists(instance,key) => sender ! doesExist(instance,key)
       case Shutdown() =>  connections.values.foreach(_.get.close())
-      case Register(basePath,connection,useLocalShadow) => sender ! register(basePath,connection,useLocalShadow)
+      case Register(basePath,connection,useLocalShadow,interval) => sender ! register(basePath,connection,useLocalShadow,interval)
 
     }
 
-  private def register(basePath : String, zookeeperConnection : String,useLocalShadow : Boolean) : UUID ={
+  private def register(basePath : String, zookeeperConnection : String,useLocalShadow : Boolean, interval : Duration) : UUID ={
 
 
     val id =UUID.randomUUID()
     val path=ZooCache.CACHE_ROOT+"/"+basePath+"/"
     val invalidationPath= ZooCache.INVALIDATE_PATH+"/"+basePath
 
-    registration = registration+ (id -> (path,zookeeperConnection,useLocalShadow))
+    registration = registration+ (id -> (path,zookeeperConnection,useLocalShadow,interval))
 
     if(useLocalShadow) setupInvalidation
     def setupInvalidation{
@@ -99,7 +99,7 @@ class ZooCacheActor extends Actor with Logging {
 
   private def getConnection(instance : UUID): Option[CuratorFramework] = {
 
-    val (_,connectionString,_) = registration(instance)
+    val (_,connectionString,_,interval) = registration(instance)
 
     def establishConnection = {
        val retryPolicy = new ExponentialBackoffRetry(100,3)
@@ -170,7 +170,7 @@ class ZooCacheActor extends Actor with Logging {
 
 
   def doesExist( instance :UUID,  key : String) : Boolean = {
-    val (basePath,_,_)= registration(instance)
+    val (basePath,_,_,_)= registration(instance)
     getConnection(instance) match {
       case Some(client) => if (client.checkExists().forPath(basePath+key)!=null) true else false
       case None => false
@@ -185,7 +185,7 @@ class ZooCacheActor extends Actor with Logging {
 
     val client =  hasClient.get
 
-    val (basePath,_,useLocalShadow)= registration(instance)
+    val (basePath,_,useLocalShadow,_)= registration(instance)
 
     def putBytes (input :Array[Byte],ttl: Array[Byte]):Boolean  ={
       val path=basePath+key
@@ -236,7 +236,7 @@ class ZooCacheActor extends Actor with Logging {
     if (hasClient.isEmpty) return None
     val client =  hasClient.get
 
-    val (basePath,_,useLocalShadow)= registration(instance)
+    val (basePath,_,useLocalShadow,_)= registration(instance)
      def  getBytes(path : String) :Option[Array[Byte]] ={
       val fullPath=basePath+path
       try {
@@ -295,7 +295,7 @@ class ZooCacheActor extends Actor with Logging {
 
     val client =  hasClient.get
 
-    val (basePath,_,useLocalShadow)= registration(instance)
+    val (basePath,_,useLocalShadow,_)= registration(instance)
     if (doesExist(instance,key))  remove(basePath+key)
 
     def deleteNode(path: String) {
@@ -320,7 +320,7 @@ class ZooCacheActor extends Actor with Logging {
     def remove(path :String){
       val children=client.getChildren.forPath(path)
       for (child <- children) {
-        if (child!=ZooCache.TTL_PATH) {  //assumption only leaf nodes have ttl!
+        if ("/"+child!=ZooCache.TTL_PATH) {  //assumption only leaf nodes have ttl!
               remove(path+"/"+child)
         }
       }

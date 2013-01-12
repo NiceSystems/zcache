@@ -20,14 +20,15 @@ package com.nice.zoocache
  */
 import org.scalatest.{BeforeAndAfterAll, FunSpec}
 import com.netflix.curator.test.TestingServer
+import akka.util.duration._
+
 
 
 class LocalShadowSpec extends FunSpec with BeforeAndAfterAll{
-  val server=new TestingServer()
+  val server=new TestingServer(9999)
   val testCluster=server.getConnectString
-  //var testCluster="10.211.55.25:2181"
-  val cache  = new ZooCache(testCluster,"test",true)
-  val second = new ZooCache(testCluster,"test",true)
+  val cache  = new ZooCache(testCluster,"test",true,maxWait=10 seconds)
+  val second = new ZooCache(testCluster,"test",true,maxWait=10 seconds)
 
 
 

@@ -25,6 +25,8 @@ import org.msgpack.ScalaMessagePack
 import scala.Some
 import java.lang.{String => JString}
 import scala.Predef.String
+import akka.util.duration._
+
 
 /**
  * User: arnonrgo
@@ -36,7 +38,7 @@ class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
   var server=new TestingServer()
   var testCluster=server.getConnectString
   //var testCluster="hadoop2"
-  var cache=new ZooCache(testCluster,"test")
+  var cache=new ZooCache(testCluster,"test",maxWait=10 seconds)
 
   it("should connect to the cluster"){
     val tempCache=new ZooCache(testCluster,"test")
