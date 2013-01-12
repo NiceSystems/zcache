@@ -70,12 +70,12 @@ object ZooCache  {
 
 }
 
-class ZooCache(connectionString: String,systemId : String, private val useLocalShadow: Boolean = false,private val interval : Duration = 30 minutes) extends ZCache with Logging {
+class ZooCache(connectionString: String,systemId : String, private val useLocalShadow: Boolean = false,private val interval : Duration = 30 minutes, maxWait : Duration =1 second) extends ZCache with Logging {
 
-  val atMost=2 seconds
-  implicit val timeout=Timeout(2 seconds)
+  val atMost=maxWait
+  implicit val timeout=Timeout(maxWait)
 
-  val id = Await.result(ZooCache.cache ? Register(systemId,connectionString,useLocalShadow), atMost).asInstanceOf[UUID]
+  val id = Await.result(ZooCache.cache ? Register(systemId,connectionString,useLocalShadow,interval), atMost).asInstanceOf[UUID]
 
 
   /*
