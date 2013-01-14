@@ -63,7 +63,7 @@ class ZooCacheActor extends Actor with Logging {
 
 
     val id =UUID.randomUUID()
-    val path=ZooCache.CACHE_ROOT :/ basePath
+    val path=ZooCache.CACHE_ID :/ basePath
     val invalidationPath= ZooCache.INVALIDATE_PATH :> basePath
 
     registration = registration+ (id -> (path,zookeeperConnection,useLocalShadow,interval))
@@ -112,7 +112,7 @@ class ZooCacheActor extends Actor with Logging {
           build
         try {
         newConn.start()
-        newConn.checkExists.forPath(ZooCache.CACHE_ROOT)
+        newConn.checkExists.forPath(ZooCache.CACHE_ID)
 
         connections= connections + (connectionString->Some(newConn))
         val sched=ZooCache.system.scheduler.schedule(0 seconds,interval, scavenger, Tick(newConn))
@@ -219,7 +219,7 @@ class ZooCacheActor extends Actor with Logging {
 
     val (basePath,_,useLocalShadow,_)= registration(instance)
      def  getBytes(path : String) :Option[Array[Byte]] ={
-      val fullPath=basePath+path
+      val fullPath=basePath :> path
       try {
         if (client.checkExists().forPath(fullPath) == null) None
         else
@@ -302,7 +302,7 @@ class ZooCacheActor extends Actor with Logging {
     def remove(path :String){
       val children=client.getChildren.forPath(path)
       for (child <- children) {
-        if ("/"+child!=ZooCache.TTL_PATH) {  //assumption only leaf nodes have ttl!
+        if (child!=ZooCache.TTL_PATH) {  //assumption only leaf nodes have ttl!
               remove(path :> child)
         }
       }

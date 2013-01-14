@@ -7,6 +7,7 @@ import com.netflix.curator.framework.{CuratorFramework, CuratorFrameworkFactory}
 import com.netflix.curator.retry.ExponentialBackoffRetry
 import akka.actor.ActorSystem
 import akka.util.duration._
+import PathString._
 
 
 /**
@@ -52,14 +53,14 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
       cache.put(i.toString,t,1)
 
 
-   val y=client.getChildren.forPath(ZooCache.CACHE_ROOT+"/"+systemId)
+   val y=client.getChildren.forPath(ZooCache.CACHE_ID :> systemId)
     println(y.size())
     Thread.sleep(10)
 
     testScavenger.clean(client)
 
-    println(client.getChildren.forPath(ZooCache.CACHE_ROOT+"/"+systemId).size())
-    assert(client.getChildren.forPath(ZooCache.CACHE_ROOT+"/"+systemId).isEmpty)
+    println(client.getChildren.forPath(ZooCache.CACHE_ID :>  systemId).size())
+    assert(client.getChildren.forPath(ZooCache.CACHE_ID :> systemId).isEmpty)
   }
 
   it("doesn't remove items that aren't expired") {
@@ -73,7 +74,7 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
 
     testScavenger.clean(client)
 
-    val children=client.getChildren.forPath(ZooCache.CACHE_ROOT+"/"+systemId)
+    val children=client.getChildren.forPath(ZooCache.CACHE_ID :> systemId)
     assert(children.size()==1)
     assert(children.get(0)=="1")
   }
@@ -108,7 +109,7 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
 
 
   def checkCache(path: String,size :Int=1, cl : CuratorFramework = client) {
-    val children = cl.getChildren.forPath(ZooCache.CACHE_ROOT+ "/" + path)
+    val children = cl.getChildren.forPath(ZooCache.CACHE_ID :> path)
     assert(children.size() == size)
     println(size)
     assert(children.get(0) == "1")

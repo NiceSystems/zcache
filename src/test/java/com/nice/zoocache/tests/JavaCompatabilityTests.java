@@ -44,7 +44,7 @@ public class JavaCompatabilityTests  {
     public JavaCompatabilityTests() throws Exception {
         server = new TestingServer();
         testCluster=server.getConnectString();
-        cache = new JZooCache(testCluster, "javaTest",false, Duration.create(3, "seconds"));
+        cache = new JZooCache(testCluster, "javaTest",false, Duration.create(6, "seconds"));
     }
 
 
