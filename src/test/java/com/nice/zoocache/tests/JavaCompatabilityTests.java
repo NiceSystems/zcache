@@ -19,6 +19,7 @@ package com.nice.zoocache.tests;
  *          <p/>
  */
 
+import akka.util.Duration;
 import com.netflix.curator.test.TestingServer;
 import com.nice.zoocache.JZooCache;
 import org.junit.Test;
@@ -43,7 +44,7 @@ public class JavaCompatabilityTests  {
     public JavaCompatabilityTests() throws Exception {
         server = new TestingServer();
         testCluster=server.getConnectString();
-        cache = new JZooCache(testCluster, "javaTest",false);
+        cache = new JZooCache(testCluster, "javaTest",false, Duration.create(3, "seconds"));
     }
 
 

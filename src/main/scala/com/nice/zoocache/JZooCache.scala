@@ -20,6 +20,7 @@ package com.nice.zoocache
  */
 import org.msgpack.{ScalaMessagePack, MessagePack}
 import javax.xml.soap.SOAPMessage
+import akka.util.Duration
 
 /**
  * User: arnonrgo
@@ -34,9 +35,10 @@ import javax.xml.soap.SOAPMessage
  * @param connectionString Zookeeper quorum connection string
  * @param systemId unique Id for the cache (provides a path in Zookeeper just for the app)
  * @param useLocalShadow Should the cache keep a local copy of values retrieved (a local LRU cache)
+ * @param maxWait how much time (in milliseconds) should the cache wait for response before a timeout
  */
-class JZooCache(connectionString: String,systemId : String, useLocalShadow : Boolean){
-  lazy val cache= new ZooCache(connectionString,systemId, useLocalShadow)
+class JZooCache(connectionString: String,systemId : String, useLocalShadow : Boolean, maxWait:Duration){
+  lazy val cache= new ZooCache(connectionString,systemId, useLocalShadow,maxWait = maxWait)
 
 
   /**
