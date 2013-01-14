@@ -7,6 +7,7 @@ import collection.JavaConversions._
 import org.msgpack.ScalaMessagePack._
 import com.netflix.curator.framework.recipes.leader.{LeaderSelector, LeaderSelectorListener}
 import com.netflix.curator.framework.state.ConnectionState
+import PathString._
 
 
 /**
@@ -68,7 +69,7 @@ class Scavenger extends Actor with Logging{
      }
 
      def validateTtl(itemPath :String) {
-      val ttlPath=itemPath+ZooCache.TTL_PATH
+      val ttlPath=itemPath :> ZooCache.TTL_PATH
       if (client.checkExists().forPath(ttlPath)== null) return
 
       try{

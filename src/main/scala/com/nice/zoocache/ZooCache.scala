@@ -33,6 +33,7 @@ import akka.dispatch.Await
 import akka.util.duration._
 import akka.util.{Duration, Timeout}
 import java.util.UUID
+import PathString._
 
 /**
  * User: arnonrgo
@@ -50,7 +51,7 @@ object ZooCache  {
   private[zoocache] val CACHE_ROOT = "/"+CACHE_ID
   private[zoocache] val LOCALSHADOW =  "LocalShadow"
   private[zoocache] val SCAVENGER = "Scavenger"
-  private[zoocache] val INVALIDATE_PATH=CACHE_ROOT+"/invalidate"
+  private[zoocache] val INVALIDATE_PATH=CACHE_ROOT :> "invalidate"
   private val DEFAULT_LOCAL_CACHE_SIZE = 10000
 
 
@@ -71,7 +72,7 @@ class ZooCache(connectionString: String,systemId : String, private val useLocalS
 
 
   def invalidate(){
-     val systemInvalidationPath=ZooCache.INVALIDATE_PATH+"/"+systemId
+     val systemInvalidationPath=ZooCache.INVALIDATE_PATH :> systemId
      ZooCache.cache ! Invalidate(id,systemInvalidationPath)
   }
 
@@ -92,14 +93,14 @@ class ZooCache(connectionString: String,systemId : String, private val useLocalS
     }
   }
   def get[T<:AnyRef](parentKey: String,key: String)(implicit manifest : Manifest[T]):Option[T] = {
-    get[T](parentKey+"/"+key)
+    get[T](parentKey :> key)
   }
 
   def put(parentKey:String,key :String, input : Any):Boolean ={
-    put(parentKey+"/"+key,input)
+    put(parentKey :> key,input)
   }
   def put(parentKey:String,key :String, input : Any, ttl :Long):Boolean ={
-    put(parentKey+"/"+key,input,ttl)
+    put(parentKey :> key,input,ttl)
   }
 
   def removeItem(key: String) {

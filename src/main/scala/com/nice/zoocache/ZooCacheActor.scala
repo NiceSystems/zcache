@@ -4,7 +4,7 @@ import akka.util.{Timeout, Duration}
 import grizzled.slf4j.Logging
 import com.netflix.curator.retry.ExponentialBackoffRetry
 import com.netflix.curator.framework.{CuratorFramework, CuratorFrameworkFactory}
-import akka.actor.{ActorRef, Actor, Props}
+import akka.actor.{ActorRef, Actor}
 import org.apache.zookeeper.{WatchedEvent, Watcher}
 import org.msgpack.ScalaMessagePack._
 
@@ -14,7 +14,7 @@ import akka.util.duration._
 import akka.pattern.ask
 import java.util.UUID
 import collection.JavaConversions._
-import com.netflix.curator.framework.api.CuratorWatcher
+import PathString._
 
 
 /**
@@ -33,6 +33,9 @@ case class Exists(instance : UUID, key: String)
 case class Register(basePath : String, zookeeperConnection : String,useLocalShadow : Boolean, interval : Duration = 30 minutes)
 
 class ZooCacheActor extends Actor with Logging {
+
+
+
 
   implicit val timeout = Timeout(1 second)
 
@@ -60,8 +63,8 @@ class ZooCacheActor extends Actor with Logging {
 
 
     val id =UUID.randomUUID()
-    val path=ZooCache.CACHE_ROOT+"/"+basePath+"/"
-    val invalidationPath= ZooCache.INVALIDATE_PATH+"/"+basePath
+    val path=ZooCache.CACHE_ROOT :/ basePath
+    val invalidationPath= ZooCache.INVALIDATE_PATH :> basePath
 
     registration = registration+ (id -> (path,zookeeperConnection,useLocalShadow,interval))
 
@@ -103,7 +106,6 @@ class ZooCacheActor extends Actor with Logging {
 
     def establishConnection = {
        val retryPolicy = new ExponentialBackoffRetry(100,3)
-      //val retryPolicy = new com.netflix.curator.retry.RetryOneTime(100)
         val newConn = CuratorFrameworkFactory.builder().
           connectString(connectionString).
           retryPolicy(retryPolicy).connectionTimeoutMs(1000).
@@ -138,10 +140,10 @@ class ZooCacheActor extends Actor with Logging {
   def invalidate(instance : UUID, systemInvalidationPath : String){
     getConnection(instance) match {
       case Some(client) => {
-          if (client.checkExists.forPath(systemInvalidationPath+"/doit")==null)
-            client.create().forPath(systemInvalidationPath+"/doit")
+          if (client.checkExists.forPath(systemInvalidationPath :> "doit")==null)
+            client.create().forPath(systemInvalidationPath :> "doit")
           else
-            client.delete().forPath(systemInvalidationPath+"/doit")
+            client.delete().forPath(systemInvalidationPath :> "doit")
           }
     }
   }
@@ -151,7 +153,7 @@ class ZooCacheActor extends Actor with Logging {
   def doesExist( instance :UUID,  key : String) : Boolean = {
     val (basePath,_,_,_)= registration(instance)
     getConnection(instance) match {
-      case Some(client) => if (client.checkExists().forPath(basePath+key)!=null) true else false
+      case Some(client) => if (client.checkExists().forPath(basePath :> key)!=null) true else false
       case None => false
     }
   }
@@ -167,8 +169,8 @@ class ZooCacheActor extends Actor with Logging {
     val (basePath,_,useLocalShadow,_)= registration(instance)
 
     def putBytes (input :Array[Byte],ttl: Array[Byte]):Boolean  ={
-      val path=basePath+key
-      val ttlPath=path+ZooCache.TTL_PATH
+      val path=basePath :> key
+      val ttlPath=path :> ZooCache.TTL_PATH
 
       try {
 
@@ -206,8 +208,8 @@ class ZooCacheActor extends Actor with Logging {
 
 
   private def putLocalCopy(id: UUID,key: String, input: Array[Byte], meta: ItemMetadata) {
-    shadowActor ! UpdateLocal(id.toString+key,input)
-    shadowActor ! UpdateLocal(id.toString+key+ ZooCache.TTL_PATH, meta)
+    shadowActor ! UpdateLocal(id.toString :> key,input)
+    shadowActor ! UpdateLocal(id.toString :> key :> ZooCache.TTL_PATH, meta)
   }
 
   def get(instance : UUID, key: String) : Option[Array[Byte]]= {
@@ -233,7 +235,7 @@ class ZooCacheActor extends Actor with Logging {
 
     def isInShadow:Boolean ={
       if (!useLocalShadow) return false
-      val reply=Await.result(shadowActor ? GetLocal(instance+key+ZooCache.TTL_PATH), 1 second).asInstanceOf[Option[ItemMetadata]]
+      val reply=Await.result(shadowActor ? GetLocal(instance.toString :> key :> ZooCache.TTL_PATH), 1 second).asInstanceOf[Option[ItemMetadata]]
       reply match
       {
         case Some(metadata)=>  metadata.isValid
@@ -242,7 +244,7 @@ class ZooCacheActor extends Actor with Logging {
     }
 
     def isInCache:Option[ItemMetadata] ={
-      getBytes(key+ZooCache.TTL_PATH) match {
+      getBytes(key :> ZooCache.TTL_PATH) match {
         case Some(meta) => {
           val result=unpack[ItemMetadata](meta)
           if (result.isValid) Some(result) else None
@@ -252,7 +254,7 @@ class ZooCacheActor extends Actor with Logging {
     }
 
 
-    if (isInShadow) return  Await.result(shadowActor ? GetLocal(instance+key), 1 second).asInstanceOf[Option[Array[Byte]]]
+    if (isInShadow) return  Await.result(shadowActor ? GetLocal(instance.toString :>  key), 1 second).asInstanceOf[Option[Array[Byte]]]
 
     isInCache match{
       case None => None
@@ -275,32 +277,33 @@ class ZooCacheActor extends Actor with Logging {
     val client =  hasClient.get
 
     val (basePath,_,useLocalShadow,_)= registration(instance)
-    if (doesExist(instance,key))  remove(basePath+key)
+    if (doesExist(instance,key))  remove(basePath :> key)
 
     def deleteNode(path: String) {
-      if (client.checkExists().forPath(path + ZooCache.TTL_PATH)!=null) {
+      if (client.checkExists().forPath(path :> ZooCache.TTL_PATH)!=null) {
         client.inTransaction().
-          delete().forPath(path + ZooCache.TTL_PATH).
+          delete().forPath(path :> ZooCache.TTL_PATH).
           and().
           delete().forPath(path).
           and().
           commit()
 
-        if(useLocalShadow) shadowActor ! RemoveLocal(instance+key + ZooCache.TTL_PATH)
+        if(useLocalShadow) shadowActor ! RemoveLocal(instance.toString :> key :> ZooCache.TTL_PATH)
       } else {
         client.delete().forPath(path)
       }
 
       if (useLocalShadow) {
-        shadowActor ! RemoveLocal(instance+key)
+        shadowActor ! RemoveLocal(instance.toString :> key)
 
       }
     }
+
     def remove(path :String){
       val children=client.getChildren.forPath(path)
       for (child <- children) {
         if ("/"+child!=ZooCache.TTL_PATH) {  //assumption only leaf nodes have ttl!
-              remove(path+"/"+child)
+              remove(path :> child)
         }
       }
       deleteNode(path)
