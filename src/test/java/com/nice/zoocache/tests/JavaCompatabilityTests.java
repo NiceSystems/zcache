@@ -93,7 +93,8 @@ public class JavaCompatabilityTests  {
 
         //BaseRequest<TestPerson> newPersonReq=msgpack.read(ser,BaseRequest.class);
         //TestPerson newPerson=newPersonReq.getBaseRequestBody();
-        MyTestPerson newPerson= cache.get("1",MyTestPerson.class);
+        TestPerson newPerson= cache.get("1",TestPerson.class);
+        //MyTestPerson newPerson= cache.get("1",MyTestPerson.class);
         System.out.println(newPerson.getIdToAddress());
 
 
