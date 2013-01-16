@@ -12,18 +12,21 @@ object PathString{
 
 class PathString(private val s: String) {
   private val str= if (s.startsWith("/")) s else "/"+s
+
   def :>( that: String) :String ={
     ensure(this) + clean(that)
   }
+  def :/(that: String) : String={
+    this :> that + "/"
+  }
+
   private def clean(s:String): String ={
     if (s.startsWith("/")) s.substring(1,s.length) else s
   }
   private def ensure(ms: PathString) ={
     if (!ms.str.endsWith("/")) ms.str + "/" else ms.s
   }
-  def :/(that: String) : String={
-    this :> that + "/"
-  }
+
   override def toString = str
   def noPath = str.replace("/","")
 }

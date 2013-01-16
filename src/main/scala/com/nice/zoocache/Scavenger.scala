@@ -57,19 +57,19 @@ class Scavenger extends Actor with Logging{
 
   private[zoocache] def clean(client : CuratorFramework){
 
-    cleaner(ZooCache.CACHE_ID)
+    cleaner(ZooCacheSystem.CACHE_ID)
 
     def cleaner(path : String){
       val children=client.getChildren.forPath(path)
       for (child <- children) {
-        if (child!=ZooCache.TTL_PATH) {  //assumption only leaf nodes have ttl!
+        if (child!=ZooCacheSystem.TTL_PATH) {  //assumption only leaf nodes have ttl!
           cleaner(path :> child) }
         else validateTtl(path)
         }
      }
 
      def validateTtl(itemPath :String) {
-      val ttlPath=itemPath :> ZooCache.TTL_PATH
+      val ttlPath=itemPath :> ZooCacheSystem.TTL_PATH
       if (client.checkExists().forPath(ttlPath)== null) return
 
       try{

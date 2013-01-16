@@ -35,7 +35,7 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
   val testCluster=server.getConnectString
   private val retryPolicy = new ExponentialBackoffRetry(1000, 10)
   val systemId="scavange"
-  val cache=new ZooCache(testCluster,systemId,maxWait = 10 seconds)
+  val cache=new SyncZooCache(testCluster,systemId,maxWait = 10 seconds)
   val client = CuratorFrameworkFactory.builder().
     connectString(testCluster).
     retryPolicy(retryPolicy).
@@ -53,20 +53,20 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
       cache.put(i.toString,t,1)
 
 
-   val y=client.getChildren.forPath(ZooCache.CACHE_ID :> systemId)
+   val y=client.getChildren.forPath(ZooCacheSystem.CACHE_ID :> systemId)
     println(y.size())
     Thread.sleep(10)
 
     testScavenger.clean(client)
 
-    println(client.getChildren.forPath(ZooCache.CACHE_ID :>  systemId).size())
-    assert(client.getChildren.forPath(ZooCache.CACHE_ID :> systemId).isEmpty)
+    println(client.getChildren.forPath(ZooCacheSystem.CACHE_ID :>  systemId).size())
+    assert(client.getChildren.forPath(ZooCacheSystem.CACHE_ID :> systemId).isEmpty)
   }
 
   it("doesn't remove items that aren't expired") {
     val t=new Test()
     t.name="tada"
-    cache.put("1",t,ZooCache.FOREVER)
+    cache.put("1",t,ZooCacheSystem.FOREVER)
     for (i<-2 to 11)
       cache.put(i.toString,t,1)
 
@@ -74,7 +74,7 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
 
     testScavenger.clean(client)
 
-    val children=client.getChildren.forPath(ZooCache.CACHE_ID :> systemId)
+    val children=client.getChildren.forPath(ZooCacheSystem.CACHE_ID :> systemId)
     assert(children.size()==1)
     assert(children.get(0)=="1")
   }
@@ -82,7 +82,7 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
   it("runs automatically in a ZooCache instance") {
     val path="independent"
     val independentServer=new TestingServer(9998)
-    val newCache=new ZooCache(independentServer.getConnectString,path,interval = 50 milliseconds,maxWait = 1 hour)
+    val newCache=new SyncZooCache(independentServer.getConnectString,path,interval = 50 milliseconds,maxWait = 1 hour)
     val indie = CuratorFrameworkFactory.builder().
       connectString(independentServer.getConnectString).
       retryPolicy(retryPolicy).
@@ -96,10 +96,10 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
   }
 
 
-  def addToCache(newCache: ZooCache, path: String) {
+  def addToCache(newCache: SyncZooCache, path: String) {
     val t = new Test()
     t.name = "tada"
-    newCache.put("1", t, ZooCache.FOREVER)
+    newCache.put("1", t, ZooCacheSystem.FOREVER)
     for (i <- 2 to 11)
       newCache.put(i.toString, t, 1)
 
@@ -109,7 +109,7 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
 
 
   def checkCache(path: String,size :Int=1, cl : CuratorFramework = client) {
-    val children = cl.getChildren.forPath(ZooCache.CACHE_ID :> path)
+    val children = cl.getChildren.forPath(ZooCacheSystem.CACHE_ID :> path)
     assert(children.size() == size)
     println(size)
     assert(children.get(0) == "1")
@@ -118,7 +118,7 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
   it("runs scavenger periodically") {
     val path="repeater"
     val repeatServer=new TestingServer(9999)
-    val newCache=new ZooCache(repeatServer.getConnectString,path,interval = 50 milliseconds,maxWait = 1 hour)
+    val newCache=new SyncZooCache(repeatServer.getConnectString,path,interval = 50 milliseconds,maxWait = 1 hour)
     addToCache(newCache,path)
     val repeatClient = CuratorFrameworkFactory.builder().
       connectString(repeatServer.getConnectString).
@@ -147,9 +147,9 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
       build
     oneClient.start()
     val fastPath="fast"
-    val fast=new ZooCache(oneCache.getConnectString,fastPath,interval = 50 milliseconds,maxWait =  2 seconds)
+    val fast=new SyncZooCache(oneCache.getConnectString,fastPath,interval = 50 milliseconds,maxWait =  2 seconds)
     val slowPath="slow"
-    val slow=new ZooCache(oneCache.getConnectString,slowPath,interval = 50 milliseconds,maxWait = 2 seconds)
+    val slow=new SyncZooCache(oneCache.getConnectString,slowPath,interval = 50 milliseconds,maxWait = 2 seconds)
     Thread.sleep(100)
 
     addToCache(slow,slowPath)
@@ -164,9 +164,9 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
 
   it("can coordinate with multiple Scavenger instances") {
     val fastPath="fast"
-    val fast=new ZooCache(testCluster,fastPath,interval = 50 milliseconds)
+    val fast=new SyncZooCache(testCluster,fastPath,interval = 50 milliseconds)
     val slowPath="slow"
-    val slow=new ZooCache(testCluster,slowPath,interval = 60 milli)
+    val slow=new SyncZooCache(testCluster,slowPath,interval = 60 milli)
     Thread.sleep(1000)
   }
 

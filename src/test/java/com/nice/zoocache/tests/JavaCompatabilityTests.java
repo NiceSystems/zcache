@@ -21,7 +21,7 @@ package com.nice.zoocache.tests;
 
 import akka.util.Duration;
 import com.netflix.curator.test.TestingServer;
-import com.nice.zoocache.JZooCache;
+import com.nice.zoocache.SyncZooCache;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -39,12 +39,12 @@ import static org.junit.Assert.assertEquals;
 public class JavaCompatabilityTests  {
     TestingServer server;
     String testCluster;
-    JZooCache cache;
+    SyncZooCache cache;
 
     public JavaCompatabilityTests() throws Exception {
         server = new TestingServer();
         testCluster=server.getConnectString();
-        cache = new JZooCache(testCluster, "javaTest",false, Duration.create(6, "seconds"));
+        cache = new SyncZooCache(testCluster, "javaTest",false, Duration.create(6, "seconds"), Duration.create(6, "seconds"));
     }
 
 
@@ -54,7 +54,7 @@ public class JavaCompatabilityTests  {
         String str="blah";
         String key="testString";
         cache.put(key,str);
-        String result=cache.get(key,String.class);
+        String result=cache.get(key, String.class);
         System.out.print(result);
 
         assertEquals(str,result);
@@ -88,6 +88,7 @@ public class JavaCompatabilityTests  {
 
 
         cache.put("1",person);
+
         //byte[] ser=msgpack.write(personRequest);
 
 

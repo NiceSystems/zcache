@@ -20,28 +20,18 @@ package com.nice.zoocache
  */
 import org.scalatest.{BeforeAndAfterAll, FunSpec}
 import com.netflix.curator.test.TestingServer
-import org.msgpack.ScalaMessagePack._
-import org.msgpack.ScalaMessagePack
 import scala.Some
-import java.lang.{String => JString}
-import scala.Predef.String
 import akka.util.duration._
 
-
-/**
- * User: arnonrgo
- * Date: 12/26/12
- * Time: 12:01 PM
- */
-class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
+class SyncZooCacheSpec extends FunSpec with BeforeAndAfterAll {
 
   var server=new TestingServer()
   var testCluster=server.getConnectString
   //var testCluster="hadoop2"
-  var cache=new ZooCache(testCluster,"test",maxWait=10 seconds)
+  var cache=new SyncZooCache(testCluster,"test",maxWait=10 seconds)
 
   it("should connect to the cluster"){
-    val tempCache=new ZooCache(testCluster,"test")
+    val tempCache=new SyncZooCache(testCluster,"test")
   }
 
   it("should get object back by generics"){
@@ -56,7 +46,7 @@ class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
     assert(value.name===t.name)
   }
 
-   it("should be able to write twice to same key (last wins)"){
+  it("should be able to write twice to same key (last wins)"){
     val t=new Test()
     t.name="Arnon"
     val key="sameKeyUpdate"
@@ -92,16 +82,16 @@ class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
     assert(cache.get[Test](parent,key1).get.name===t1.name)
   }
 
-   it("can verify an item is in the cache"){
-     val t1=new Test()
-     t1.name="first"
-     val key ="k"
-     cache.put(key,t1)
+  it("can verify an item is in the cache"){
+    val t1=new Test()
+    t1.name="first"
+    val key ="k"
+    cache.put(key,t1)
 
-     assert(cache.doesExist(key))
-     assert(!cache.doesExist("blah"))
+    assert(cache.doesExist(key))
+    assert(!cache.doesExist("blah"))
 
-   }
+  }
 
   it("can get remove all for a parent key"){
     val t1=new Test()
@@ -128,7 +118,7 @@ class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
 
   it("should serve diffrent caches to different apps"){
 
-    val otherCache= new ZooCache(testCluster,"otherApp")
+    val otherCache= new SyncZooCache(testCluster,"otherApp")
     otherCache.put("1",new Test())
 
     assert(cache.get[Test]("1")==None)
@@ -137,7 +127,7 @@ class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
 
   it("should serve same cache to different instances"){
 
-    val otherCache= new ZooCache(testCluster,"test")
+    val otherCache= new SyncZooCache(testCluster,"test")
     val t=new Test()
     t.name="same"
     otherCache.put("1",t)
@@ -148,7 +138,7 @@ class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
   it("should do a simple put/get  with memory shadow"){
     val t=new Test()
     t.name="Arnon"
-    val shadowCache= new ZooCache(testCluster,"test",true)
+    val shadowCache= new SyncZooCache(testCluster,"test",true)
 
     shadowCache.put("test",t)
     val value = shadowCache.get[Test]("test")
@@ -175,7 +165,7 @@ class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
     val t1=new Test()
     t1.name="old"
     val key="deleted"
-    cache.put(key,t1,ZooCache.FOREVER)
+    cache.put(key,t1,ZooCacheSystem.FOREVER)
     cache.removeItem(key)
 
     val value=cache.get[Test](key)
@@ -186,7 +176,7 @@ class ZooCacheSpec extends FunSpec with BeforeAndAfterAll {
   it("throws exception if bad zookeeper connection") (pending)
 
   override def afterAll{
-   // cache.shutdown()
+    // cache.shutdown()
   }
 
 

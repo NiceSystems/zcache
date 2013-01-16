@@ -27,8 +27,8 @@ import akka.util.duration._
 class LocalShadowSpec extends FunSpec with BeforeAndAfterAll{
   val server=new TestingServer(9999)
   val testCluster=server.getConnectString
-  val cache  = new ZooCache(testCluster,"test",true,maxWait=10 seconds)
-  val second = new ZooCache(testCluster,"test",true,maxWait=10 seconds)
+  val cache  = new SyncZooCache(testCluster,"test",true,maxWait=10 seconds)
+  val second = new SyncZooCache(testCluster,"test",true,maxWait=10 seconds)
 
 
 
@@ -48,11 +48,11 @@ class LocalShadowSpec extends FunSpec with BeforeAndAfterAll{
     t.name="lremote"
     val key="localValid"
 
-    second.put(key,t,ZooCache.FOREVER)
+    second.put(key,t,ZooCacheSystem.FOREVER)
     val firstResult=cache.get[Test](key)
 
     t.name="lchanged"
-    second.put(key,t,ZooCache.FOREVER)
+    second.put(key,t,ZooCacheSystem.FOREVER)
     val secondResult=cache.get[Test](key)
 
     assert(firstResult.get.name===secondResult.get.name)
@@ -69,7 +69,7 @@ class LocalShadowSpec extends FunSpec with BeforeAndAfterAll{
 
     Thread.sleep(2000)
     t.name="changed"
-    second.put(key,t,ZooCache.FOREVER)
+    second.put(key,t,ZooCacheSystem.FOREVER)
     val secondResult=cache.get[Test](key)
     assert(secondResult.get.name===t.name)
 
@@ -80,12 +80,12 @@ class LocalShadowSpec extends FunSpec with BeforeAndAfterAll{
     t.name="remote"
     val key="invalidated"
 
-    second.put(key,t,ZooCache.FOREVER)
+    second.put(key,t,ZooCacheSystem.FOREVER)
     val firstResult=cache.get[Test](key)
     assert(firstResult.get.name===t.name)
 
     t.name="changed"
-    second.put(key,t,ZooCache.FOREVER)
+    second.put(key,t,ZooCacheSystem.FOREVER)
     second.invalidate()
     Thread.sleep(1000)
     val secondResult=cache.get[Test](key)
@@ -98,18 +98,18 @@ class LocalShadowSpec extends FunSpec with BeforeAndAfterAll{
     t.name="remote"
     val key="invalidated2"
 
-    second.put(key,t,ZooCache.FOREVER)
+    second.put(key,t,ZooCacheSystem.FOREVER)
     val firstResult=cache.get[Test](key)
     assert(firstResult.get.name===t.name)
 
     t.name="changed"
-    second.put(key,t,ZooCache.FOREVER)
+    second.put(key,t,ZooCacheSystem.FOREVER)
     second.invalidate()
     Thread.sleep(1000)
     val secondResult=cache.get[Test](key)
 
     t.name="changed again"
-    second.put(key,t,ZooCache.FOREVER)
+    second.put(key,t,ZooCacheSystem.FOREVER)
     second.invalidate()
     Thread.sleep(1000)
     val thirdResult=cache.get[Test](key)

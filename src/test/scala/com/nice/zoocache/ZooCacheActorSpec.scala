@@ -56,7 +56,7 @@ class ZooCacheActorSpec extends FunSpec with BeforeAndAfterAll {
     val t=new Test()
     t.name="Arnon"
 
-    testCache ! Put(id,"test",ScalaMessagePack.write(t),ZooCache.FOREVER)
+    testCache ! Put(id,"test",ScalaMessagePack.write(t),ZooCacheSystem.FOREVER)
     val value = Await.result(testCache ? GetValue(id,"test"), 1 hour).asInstanceOf[Option[Array[Byte]]]
     value match {
       case Some(result) => assert(unpack[Test](result).name===t.name)
@@ -69,10 +69,10 @@ class ZooCacheActorSpec extends FunSpec with BeforeAndAfterAll {
     t.name="Arnon"
     val key="myValue"
 
-    testCache ! Put(id,"test",ScalaMessagePack.write(t),ZooCache.FOREVER)
+    testCache ! Put(id,"test",ScalaMessagePack.write(t),ZooCacheSystem.FOREVER)
 
     t.name="Not Arnon"
-    testCache ! Put(id,"test",ScalaMessagePack.write(t),ZooCache.FOREVER)
+    testCache ! Put(id,"test",ScalaMessagePack.write(t),ZooCacheSystem.FOREVER)
 
     val value = Await.result(testCache ? GetValue(id,"test"), 1 hour).asInstanceOf[Option[Array[Byte]]]
     value match {
@@ -88,7 +88,7 @@ class ZooCacheActorSpec extends FunSpec with BeforeAndAfterAll {
       val t=new Test()
       t.name="Arnon"
 
-      testCache ! Put(id,"test",ScalaMessagePack.write(t),ZooCache.FOREVER)
+      testCache ! Put(id,"test",ScalaMessagePack.write(t),ZooCacheSystem.FOREVER)
     val value = Await.result(testCache ? GetValue(id,"test"), 1 hour).asInstanceOf[Option[Array[Byte]]]
     value match {
       case Some(result) => assert(unpack[Test](result).name===t.name)
@@ -106,7 +106,7 @@ class ZooCacheActorSpec extends FunSpec with BeforeAndAfterAll {
   it("can check exsitance") {
     val t=new Test()
     t.name="Arnon"
-    testCache ! Put(id,"test",ScalaMessagePack.write(t),ZooCache.FOREVER)
+    testCache ! Put(id,"test",ScalaMessagePack.write(t),ZooCacheSystem.FOREVER)
     val value1 = Await.result(testCache ? Exists(id,"test"), 1 second).asInstanceOf[Boolean]
     assert(value1)
     val value2 = Await.result(testCache ? Exists(id,"blah"), 1 second).asInstanceOf[Boolean]
@@ -120,8 +120,8 @@ class ZooCacheActorSpec extends FunSpec with BeforeAndAfterAll {
 
     val t=new Test()
     t.name="Arnon"
-    testCache ! Put(id,"test-1",ScalaMessagePack.write(t),ZooCache.FOREVER)
-    testCache ! Put(id2,"test-2",ScalaMessagePack.write(t),ZooCache.FOREVER)
+    testCache ! Put(id,"test-1",ScalaMessagePack.write(t),ZooCacheSystem.FOREVER)
+    testCache ! Put(id2,"test-2",ScalaMessagePack.write(t),ZooCacheSystem.FOREVER)
     assert(Await.result(testCache ? Exists(id,"test-1"), 1 second).asInstanceOf[Boolean])
     assert(!Await.result(testCache ? Exists(id2,"test-1"), 1 second).asInstanceOf[Boolean])
     assert(Await.result(testCache ? Exists(id2,"test-2"), 1 second).asInstanceOf[Boolean])
@@ -135,7 +135,7 @@ class ZooCacheActorSpec extends FunSpec with BeforeAndAfterAll {
 
     val t=new Test()
     t.name="Arnon"
-    testCache ! Put(id2,"test-2",ScalaMessagePack.write(t),ZooCache.FOREVER)
+    testCache ! Put(id2,"test-2",ScalaMessagePack.write(t),ZooCacheSystem.FOREVER)
   }
 
 
