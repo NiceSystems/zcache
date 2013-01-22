@@ -24,11 +24,11 @@ import grizzled.slf4j.Logging
 import akka.actor.Actor
 
 
-case class RemoveLocal(k:String)
-case class UpdateLocal(k:String,v:Any)
-case class HasLocalCopy(k:String)
-case class ClearMemory()
-case class GetLocal(k:String)
+private case class RemoveLocal(k:String)
+private case class UpdateLocal(k:String,v:Any)
+private case class HasLocalCopy(k:String)
+private case class ClearMemory()
+private case class GetLocal(k:String)
 
 
 /**

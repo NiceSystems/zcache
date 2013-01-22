@@ -8,6 +8,7 @@ ZooCache is a simple cache implementation on top of  [ZooKeeper™](http://zooke
 2. TTL for items
 3. Can use a local shadow (simple LRU cache) to save on network calls
 4. Ability to invalidate local shadow even if TTL has not passed
+5. 3 APIs - synchronous, Async (returns scala Futures) and Actor
 
 The project is currently compiled and tested with Scala 2.9.1
 

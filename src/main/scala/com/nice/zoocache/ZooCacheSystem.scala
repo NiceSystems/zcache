@@ -44,7 +44,6 @@ import PathString._
 
 object ZooCacheSystem  {
 
-
   val FOREVER : Long= -2
   private[zoocache] val TTL_PATH = "ttl"
   private[zoocache] val CACHE_ID : PathString= "cache"
@@ -53,14 +52,12 @@ object ZooCacheSystem  {
   private[zoocache] val INVALIDATE_PATH=CACHE_ID :> "invalidate"
   private val DEFAULT_LOCAL_CACHE_SIZE = 10000
 
-
   private[zoocache] val system=ActorSystem(CACHE_ID.noPath)
   private val scavenger=system.actorOf(Props(new Scavenger),name=SCAVENGER)
   private val shadowActor=system.actorOf(Props(new LocalShadow(DEFAULT_LOCAL_CACHE_SIZE)), name =LOCALSHADOW)
   private val cache=system.actorOf(Props(new ZooCacheActor()), name =CACHE_ID.noPath)
 
-
-
+  def getCacheActor = system.actorFor(system / CACHE_ID.noPath)
 }
 
 
