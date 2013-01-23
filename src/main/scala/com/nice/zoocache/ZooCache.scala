@@ -117,7 +117,7 @@ class ZooCache(connectionString: String,systemId : String, private val useLocalS
   def get[T<:AnyRef](parentKey: String,key: String)(implicit manifest : Manifest[T]):Future[Option[T]] =  get[T](parentKey :> key)
 
 
-  /*
+
   /**
    * get a value from the cache in a Java friendly API
    *
@@ -126,8 +126,8 @@ class ZooCache(connectionString: String,systemId : String, private val useLocalS
    * @param key the id (string) of for the value
    * @param jType class of the value (e.g. String.class)
    */
-  def get[T >: Null <: AnyRef](key: String, jType: Class[T]) : T ={
-    get[T](key)(Manifest.classType(jType)).getOrElse(null)
+  def get[T >: Null <: AnyRef](key: String, jType: Class[T]) :Future[T]  ={
+    for (f<- get[T](key)(Manifest.classType(jType))) yield f.getOrElse(null);
   }
 
   /**
@@ -138,11 +138,11 @@ class ZooCache(connectionString: String,systemId : String, private val useLocalS
    * @param key the id (string) of for the value
    * @param jType class of the value (e.g. String.class)
    */
-  def get[T >: Null <: AnyRef](parent: String,key: String, jType: Class[T]) : T ={
-    get[T](parent,key)(Manifest.classType(jType)).getOrElse(null)
+  def get[T >: Null <: AnyRef](parent: String,key: String, jType: Class[T]) :Future[T]  ={
+    for (f<- get[T](parent,key)(Manifest.classType(jType))) yield f.getOrElse(null);
   }
 
-  */
+
   /**
    * Remove all the items from a group
    *

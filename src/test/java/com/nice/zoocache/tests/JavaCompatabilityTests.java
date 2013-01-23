@@ -19,9 +19,12 @@ package com.nice.zoocache.tests;
  *          <p/>
  */
 
+import akka.dispatch.Await;
+import akka.dispatch.Future;
 import akka.util.Duration;
 import com.netflix.curator.test.TestingServer;
 import com.nice.zoocache.SyncZooCache;
+import com.nice.zoocache.ZooCache;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -100,11 +103,21 @@ public class JavaCompatabilityTests  {
 
 
         // Create templates for serializing/deserializing List and Map objects
+    }
 
+    @Test
+    public void can_use_async_API() throws Exception {
+        ZooCache aCache=   new ZooCache(testCluster, "javaTest2",false, Duration.create(6, "seconds"), Duration.create(6, "seconds"));
+        TestClass cls=new TestClass();
+        cls.value.intValue=5;
+        cls.longValue=100L;
+        cls.listStrings.add("blah");
+        String key="testClass";
 
-
-
-
+        aCache.put(key,cls);
+        Future<TestClass> result= aCache.get(key,TestClass.class);
+        TestClass res=Await.result(result,Duration.create(3, "seconds"));
+        assertEquals(cls.value.intValue, res.value.intValue);
     }
 
 

@@ -32,8 +32,9 @@ import java.util.Date
 @Message
 class ItemMetadata(){
   var updateTime  = new Date().getTime
-  def expirationTime = if (ttl!=ZooCacheSystem.FOREVER) updateTime + ttl else  Long.MaxValue
   var ttl : Long= ZooCacheSystem.FOREVER
+  def expirationTime = if (ttl!=ZooCacheSystem.FOREVER) updateTime + ttl else  Long.MaxValue
+
 
   def isValid:Boolean ={
     val current=new Date().getTime
