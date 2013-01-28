@@ -163,16 +163,24 @@ class ScavengerSpec extends FunSpec with BeforeAndAfterAll {
 
 
   it("can coordinate with multiple Scavenger instances") {
-    val fastPath="fast"
-    val fast=new SyncZooCache(testCluster,fastPath,interval = 50 milliseconds)
-    val slowPath="slow"
-    val slow=new SyncZooCache(testCluster,slowPath,interval = 60 milli)
-    Thread.sleep(1000)
+    val testServ=new TestingServer()
+    val testCluster=testServ.getConnectString
+    val retryPolicy = new ExponentialBackoffRetry(1000, 10)
+    val testClient = CuratorFrameworkFactory.builder().
+      connectString(testCluster).
+      retryPolicy(retryPolicy).
+      build
+    testClient.start()
+    testScavenger.tryCleanup(testClient,100 milli)
+    testScavenger.markLastRun(testClient)
+    expect(false,"shouldn't run")(testScavenger.shouldIRun(testClient,100 milli))
+    Thread.sleep(200)
+    expect(true,"should run")(testScavenger.shouldIRun(testClient,100 milli))
+
   }
 
 
 
-  it("can handle items that have a parent") (pending)
   it("scavenges tied to different zookeeper instances work in parallel") (pending)
 
   override def afterAll(){

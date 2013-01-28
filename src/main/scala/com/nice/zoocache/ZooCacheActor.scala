@@ -62,7 +62,7 @@ class ZooCacheActor extends Actor with Logging {
   private def register(basePath : String, zookeeperConnection : String,useLocalShadow : Boolean, interval : Duration) : UUID ={
 
 
-    val id =UUID.randomUUID()
+    var id =UUID.randomUUID()
     val path=ZooCacheSystem.CACHE_ID :/ basePath
     val invalidationPath= ZooCacheSystem.INVALIDATE_PATH :> basePath
 
@@ -115,7 +115,7 @@ class ZooCacheActor extends Actor with Logging {
         newConn.checkExists.forPath(ZooCacheSystem.CACHE_ID)
 
         connections= connections + (connectionString->Some(newConn))
-        val sched=ZooCacheSystem.system.scheduler.schedule(0 seconds,interval, scavenger, Tick(newConn))
+        val sched=ZooCacheSystem.system.scheduler.schedule(0 seconds,interval, scavenger, Tick(newConn, interval))
 
 
         Some(newConn)
